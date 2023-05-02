@@ -1,0 +1,13 @@
+# Usual system / hidden files
+.*
+
+# Node modules
+node_modules
+
+# Exclude out weights
+raven/
+models/
+*.bin
+
+# Include back gitignore
+!.gitignore

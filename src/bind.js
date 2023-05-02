@@ -41,7 +41,7 @@ if( process.platform === 'win32' ) {
 }
 
 //---------------------------
-// Lib selection
+// Lib binding loading
 //---------------------------
 
 // Setup the RWKV binding
@@ -75,61 +75,42 @@ const rwkvFFiBind = ffi.Library(
 )
 
 //---------------------------
-// POC testing
+// Module export
 //---------------------------
 
+module.exports = {
+	
+	/**
+	 * Loads the model from a file and prepares it for inference.
+	 * Returns NULL on any error. Error messages would be printed to stderr.
+	 * 
+	 * @param {String} model_file_path path to model file in ggml format.
+	 * @param {Number} n_threads number of threads to use for inference.
+	 * 
+	 * @returns {ffi_pointer} Pointer to the RWKV context.
+	 */
+	rwkv_init_from_file: rwkvFFiBind.rwkv_init_from_file,
 
+	/**
+	 * Frees all allocated memory and the context.
+	 *
+	 * @param {ffi_pointer} ctx - Pointer to the RWKV context.
+	 **/
+	rwkv_free: rwkvFFiBind.rwkv_free,
 
+	/**
+	 * Evaluates the model for a single token.
+	 * Returns false on any error. Error messages would be printed to stderr.
+	 * 
+	 * @param {ffi_pointer} ctx - Pointer to the RWKV context.
+	 * @param {Number} token - The token to evaluate.
+	 * @param {ffi_pointer} state_in - The input state.
+	 * @param {ffi_pointer} state_out - The output state.
+	 * @param {ffi_pointer} logits_out - The output logits.
+	 **/
+	rwkv_eval: rwkvFFiBind.rwkv_eval,
 
-
-// // Variable types
-// const uint32 = ref.types.uint32;
-// const int32 = ref.types.int32;
-// const bool = ref.types.bool;
-// const double = ref.types.double;
-// const float = ref.types.float;
-// const char = ref.types.char;
-
-// const RWKV_API = {
-//   'win32': 'rwkv.dll',
-//   'darwin': 'librwkv.dylib',
-//   'linux': 'librwkv.so'
-// }[process.platform];
-
-// // Define the required functions with their C arguments and return types
-// const rwkv_context = ref.types.void;
-// const rwkv_contextPtr = ref.refType(rwkv_context);
-// const stringPtr = ref.refType(char);
-// const voidPtr = ref.refType(ref.types.void);
-// const rwkv_init_from_file = ffi.Library(RWKV_API, {
-//   'rwkv_init_from_file': [rwkv_contextPtr, [stringPtr, uint32]],
-// });
-// const rwkv_eval = ffi.Library(RWKV_API, {
-//   'rwkv_eval': [bool, [rwkv_contextPtr, int32, float, float, float]],
-// });
-// const rwkv_get_state_buffer_element_count = ffi.Library(RWKV_API, {
-//   'rwkv_get_state_buffer_element_count': [uint32, [rwkv_contextPtr]],
-// });
-// const rwkv_get_logits_buffer_element_count = ffi.Library(RWKV_API, {
-//   'rwkv_get_logits_buffer_element_count': [uint32, [rwkv_contextPtr]],
-// });
-// const rwkv_free = ffi.Library(RWKV_API, {
-//   'rwkv_free': ['void', [rwkv_contextPtr]],
-// });
-// const rwkv_quantize_model_file = ffi.Library(RWKV_API, {
-//   'rwkv_quantize_model_file': [bool, [stringPtr, stringPtr, stringPtr]],
-// });
-// const rwkv_get_system_info_string = ffi.Library(RWKV_API, {
-//   'rwkv_get_system_info_string': [stringPtr, []],
-// });
-
-// // Export the functions for usage in Node.js
-// module.exports = {
-//   rwkv_init_from_file,
-//   rwkv_eval,
-//   rwkv_get_state_buffer_element_count,
-//   rwkv_get_logits_buffer_element_count,
-//   rwkv_free,
-//   rwkv_quantize_model_file,
-//   rwkv_get_system_info_string
-// };
+	// /**
+	//  * Returns count of FP32 elements in state buffer.
+	//  *
+}
