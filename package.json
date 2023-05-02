@@ -1,0 +1,17 @@
+{
+  "name": "rwkv-cpp-node",
+  "version": "1.0.0",
+  "description": "RWKV.cpp bindings for node.js (model not included)",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "RWKV",
+    "AI",
+    "LLM",
+    "RWKV.cpp"
+  ],
+  "author": "Eugene Cheah (@picocreator)",
+  "license": "MIT"
+}
