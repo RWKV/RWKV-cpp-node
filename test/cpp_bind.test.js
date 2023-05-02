@@ -38,6 +38,15 @@ describe("Loading the RWKV model", function() {
 		assert.ok(ctx != null, "Context Loaded check");
 	});
 
+	it("get the system info", function() {
+		// Lets load the model, tagged to the number of threads
+		let info = cpp_bind.rwkv_get_system_info_string();
+
+		// Validate the system info is not null
+		assert.ok(info != null, "System info NULL check");
+		assert.ok(info.indexOf("AVX") >= 0, "AVX check (check for the key, not the result)");
+	});
+
 	// Get the state and logits size
 	it("check state and logits size", function() {
 		// Get the state and logits size
@@ -72,9 +81,5 @@ describe("Loading the RWKV model", function() {
 
 		// Check if its OK?
 		assert.ok(ret);
-
-		//
-		console.log( out_logits );
 	});
-
 });

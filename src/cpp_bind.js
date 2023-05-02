@@ -160,4 +160,11 @@ module.exports = {
 	 * @returns {Boolean} True if successful, false if not.
 	 **/
 	rwkv_quantize_model_file: rwkvFFiBind.rwkv_quantize_model_file,
+
+	/**
+	 * Returns a string with system information.
+	 *
+	 * @returns {String} The system information string.
+	 **/
+	rwkv_get_system_info_string: rwkvFFiBind.rwkv_get_system_info_string,
 }
