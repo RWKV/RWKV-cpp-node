@@ -13,5 +13,10 @@
     "RWKV.cpp"
   ],
   "author": "Eugene Cheah (@picocreator)",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "cpu-features": "^0.0.7",
+    "ffi-napi": "^4.0.3",
+    "ref-napi": "^3.0.3"
+  }
 }
