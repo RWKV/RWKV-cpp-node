@@ -4,7 +4,7 @@
   "description": "RWKV.cpp bindings for node.js (model not included)",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "mocha \"./test/**/*.test.js\" --exit --trace-warnings"
   },
   "keywords": [
     "RWKV",
@@ -18,5 +18,10 @@
     "cpu-features": "^0.0.7",
     "ffi-napi": "^4.0.3",
     "ref-napi": "^3.0.3"
+  },
+  "devDependencies": {
+    "chai": "^4.3.7",
+    "chai-as-promised": "^7.1.1",
+    "mocha": "^10.2.0"
   }
 }
