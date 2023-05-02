@@ -3,7 +3,6 @@
 //---------------------------
 
 // Node deps
-const os = require("os")
 const path = require("path")
 
 // Get the FFI / NAPI bindings
@@ -40,6 +39,9 @@ if( process.platform === 'win32' ) {
 	throw new Error('Unsupported RWKV.cpp platform: ' + process.platform);
 }
 
+// The lib path to use
+const rwkvCppFullLibPath = path.resolve( process.cwd(), rwkvCppLibPath);
+
 //---------------------------
 // Lib binding loading
 //---------------------------
@@ -47,7 +49,7 @@ if( process.platform === 'win32' ) {
 // Setup the RWKV binding
 const rwkvFFiBind = ffi.Library(
 	// The library path
-	path.resolve(__dirname, rwkvCppLibPath),
+	rwkvCppFullLibPath,
 
 	// The functions to bind
 	{
@@ -79,6 +81,15 @@ const rwkvFFiBind = ffi.Library(
 //---------------------------
 
 module.exports = {
+
+	// The raw binding, without jsdoc comments
+	_raw: rwkvFFiBind,
+
+	// The path to the lib used
+	_libPath: rwkvCppFullLibPath,
+
+	// ffi module used for the lib
+	_ffi: ffi,
 	
 	/**
 	 * Loads the model from a file and prepares it for inference.
@@ -107,10 +118,46 @@ module.exports = {
 	 * @param {ffi_pointer} state_in - The input state.
 	 * @param {ffi_pointer} state_out - The output state.
 	 * @param {ffi_pointer} logits_out - The output logits.
+	 * 
+	 * @returns {Boolean} True if successful, false if not.
 	 **/
 	rwkv_eval: rwkvFFiBind.rwkv_eval,
 
-	// /**
-	//  * Returns count of FP32 elements in state buffer.
-	//  *
+	/**
+	 * Returns count of FP32 elements in state buffer.
+	 * 
+	 * @param {ffi_pointer} ctx - Pointer to the RWKV context.
+	 * 
+	 * @returns {Number} The number of elements in the state buffer.
+	 **/
+	rwkv_get_state_buffer_element_count: rwkvFFiBind.rwkv_get_state_buffer_element_count,
+
+	/**
+	 * Returns count of FP32 elements in logits buffer.
+	 * 
+	 * @param {ffi_pointer} ctx - Pointer to the RWKV context.
+	 * 
+	 * @returns {Number} The number of elements in the logits buffer.
+	 **/
+	rwkv_get_logits_buffer_element_count: rwkvFFiBind.rwkv_get_logits_buffer_element_count,
+
+	/**
+	 * Quantizes the model file.
+	 * Returns false on any error. Error messages would be printed to stderr.
+	 * 
+	 * Available format names:
+	 * - Q4_0
+	 * - Q4_1
+	 * - Q4_2
+	 * - Q5_0
+	 * - Q5_1
+	 * - Q8_0
+	 *
+	 * @param {String} model_file_path_in - Path to the input model file in ggml format.
+	 * @param {String} model_file_path_out - Path to the output model file in ggml format.
+	 * @param {String} format_name - The quantization format to use.
+	 * 
+	 * @returns {Boolean} True if successful, false if not.
+	 **/
+	rwkv_quantize_model_file: rwkvFFiBind.rwkv_quantize_model_file,
 }
