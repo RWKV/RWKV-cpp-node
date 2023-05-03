@@ -13,6 +13,7 @@ const assert = chai.assert;
 
 const os = require("os")
 const cpp_bind = require("../src/cpp_bind")
+const ai_utils = require("../src/ai_utils")
 const modelPath = "./raven/Q8_0-RWKV-4-Raven-7B-v11-Eng49%-Chn49%-Jpn1%-Other1%-20230430-ctx8192.bin"
 
 //-----------------------------------------------------------
@@ -81,5 +82,31 @@ describe("Loading the RWKV model", function() {
 
 		// Check if its OK?
 		assert.ok(ret);
+	});
+
+	// Single pass test
+	it("lets do a double pass, and sampling", function() {
+		// Initialize the state and logits buffer
+		const in_state = createStateBuffer();
+		const out_state1 = createStateBuffer();
+		const out_state2 = createStateBuffer();
+		const out_logits = createLogitsBuffer();
+
+		// Lets do a single pass
+		// 12092 : "Hello"
+		let ret = cpp_bind.rwkv_eval(ctx, 12092, in_state, out_state1, out_logits);
+		assert.ok(ret);
+
+		// Lets do a second pass
+		// 3645 : " World"
+		ret = cpp_bind.rwkv_eval(ctx, 3645, out_state1, out_state2, out_logits);
+		assert.ok(ret);
+
+		// Lets do a sampling pass
+		let sample = ai_utils.sampleLogits(out_logits, 0.5, 0.9);
+		assert.ok(sample != null);
+
+		assert.ok(sample.token != null);
+		assert.ok(sample.logprobs != null);
 	});
 });

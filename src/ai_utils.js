@@ -47,9 +47,9 @@ function softmax(arr) {
  * @param {number} temp - The temperature to use for sampling
  * @param {number} top_p - The top_p to use for sampling
  * 
- * @returns {number} - The index of the sampled token
+ * @returns {Object} containing the token index, and the final logits
  */
-function sampleLogits(logits, temp = 1.0, top_p= 1.0) {
+function sampleLogits(logits, temp = 1.0, top_p = 1.0) {
 	// Validate the logits buffer
 	if (logits == null) {
 		throw "Invalid logits buffer";
@@ -98,7 +98,7 @@ function sampleLogits(logits, temp = 1.0, top_p= 1.0) {
 
 			// If we have reached the top_p threshold, then break
 			if (cumProb >= top_p) {
-				probPairs = probPairs.slice(i + 1);
+				probPairs = probPairs.slice(0, i + 1);
 				break;
 			}
 		}
@@ -110,19 +110,28 @@ function sampleLogits(logits, temp = 1.0, top_p= 1.0) {
 	}
 
 	// Time to sample 
-	const randProb = Math.random() * cumProb;
+	let randProb = Math.random() * cumProb;
 
 	// Find the index of the sampled token
 	for(let i = 0; i < probPairs.length; i++) {
 		randProb -= probPairs[i][1];
 		if (randProb <= 0.0) {
-			return probPairs[i][0];
+			return {
+				token: probPairs[i][0],
+				logprobs: probPairs
+			};
 		}
 	}
 
 	// Out of bound? return the first index
 	// (higest probability token)
-	return probPairs[0][0];
+	//
+	// This should not happen unless an extream case 
+	// of floating point accuracy error
+	return {
+		token: probPairs[0][0],
+		logprobs: probPairs
+	};
 }
 
 // Module exports
