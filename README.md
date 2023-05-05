@@ -204,4 +204,4 @@ While the example is an extreame case, there are smaller scale off-by-1 example 
 
 @BlinkDL - for the main rwkv project
 
-- hhttps://github.com/BlinkDL/RWKV-LM
+- https://github.com/BlinkDL/RWKV-LM

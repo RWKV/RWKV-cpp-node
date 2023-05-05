@@ -1,6 +1,6 @@
 {
 	"name": "rwkv-cpp-node",
-	"version": "1.0.1",
+	"version": "1.0.2",
 	"description": "RWKV.cpp bindings for node.js (model not included)",
 	"main": "src/RWKV.js",
 	"scripts": {
