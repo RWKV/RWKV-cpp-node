@@ -97,15 +97,24 @@ describe("Loading the RWKV model", function() {
 		let ret = cpp_bind.rwkv_eval(ctx, 12092, in_state, out_state1, out_logits);
 		assert.ok(ret);
 
+		// Lets do a sampling pass
+		let sample = ai_utils.sampleLogits(out_logits, 0.5, 0.95);
+		assert.ok(sample != null);
+
+		// We can be sure that 3645 or " World" is among the logprobs
+		let logprobsToken = sample.logprobs.map((x) => x[0]);
+		assert.ok(logprobsToken.indexOf(3645) >= 0);
+		
 		// Lets do a second pass
 		// 3645 : " World"
 		ret = cpp_bind.rwkv_eval(ctx, 3645, out_state1, out_state2, out_logits);
 		assert.ok(ret);
 
 		// Lets do a sampling pass
-		let sample = ai_utils.sampleLogits(out_logits, 0.5, 0.9);
+		sample = ai_utils.sampleLogits(out_logits, 0.5, 0.9);
 		assert.ok(sample != null);
 
+		// Validate that there is a token and logprobs output
 		assert.ok(sample.token != null);
 		assert.ok(sample.logprobs != null);
 	});

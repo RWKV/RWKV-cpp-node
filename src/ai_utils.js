@@ -65,6 +65,10 @@ function sampleLogits(logits, temp = 1.0, top_p = 1.0) {
 		throw "Invalid top_p";
 	}
 
+	// Normalize temp, and top_p as float values
+	temp = temp * 1.0;
+	top_p = top_p * 1.0;
+
 	// Get the logits size
 	const logits_size = logits.length;
 

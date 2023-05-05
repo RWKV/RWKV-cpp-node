@@ -17,6 +17,7 @@
 	"dependencies": {
 		"cpu-features": "^0.0.7",
 		"ffi-napi": "^4.0.3",
+		"lru-cache": "^9.1.1",
 		"ref-napi": "^3.0.3",
 		"rwkv-tokenizer-node": "github:PicoCreator/RWKV-tokenizer-node"
 	},
