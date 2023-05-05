@@ -196,6 +196,10 @@ This leads to extreamly unexpected behaviour in the quality of the model output.
 
 While the example is an extreame case, there are smaller scale off-by-1 example regarding whitespace.
 
+# Designated maintainer
+
+[@picocreator](https://github.com/PicoCreator) - is the current maintainer of the project, ping him on the RWKV discord if you have any questions on this project
+
 # Special thanks & refrences
 
 @saharNooby - original rwkv.cpp implementation
