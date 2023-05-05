@@ -4,7 +4,7 @@ Arguably the easiest way to get RWKV.cpp running on node.js
 
 > This is not a pure JS solution, and depends on the [precompiled RWKV.cpp binaries found here](https://github.com/saharNooby/rwkv.cpp)
 
-> This currently runs purely on your CPU, while that means you can use nearly anything to run it, the downside, you dun get any insane speed up with a GPU (yet)
+> This currently runs purely on your CPU, while that means you can use nearly anything to run it, you also do not get any insane speed up with a GPU (yet)
 
 # What is RWKV?
 
@@ -32,11 +32,11 @@ npm i rwkv-cpp-node
 Download one of the prequantized rwkv.cpp weights, from hugging face (raven, is RWKV pretrained weights with fine-tuned instruction sets)
 
 - [RWKV raven 7B v11 Q8_0](https://huggingface.co/BlinkDL/rwkv-4-raven/resolve/main/Q8_0-RWKV-4-Raven-7B-v11x-Eng99%25-Other1%25-20230429-ctx8192.bin)
-- [RWKV raven 7B v11 Q8_0 (multilingual)](https://huggingface.co/BlinkDL/rwkv-4-raven/resolve/main/Q8_0-RWKV-4-Raven-7B-v11-Eng49%25-Chn49%25-Jpn1%25-Other1%25-20230430-ctx8192.bin)
+- [RWKV raven 7B v11 Q8_0 (multilingual, performs worse in english)](https://huggingface.co/BlinkDL/rwkv-4-raven/resolve/main/Q8_0-RWKV-4-Raven-7B-v11-Eng49%25-Chn49%25-Jpn1%25-Other1%25-20230430-ctx8192.bin)
 - [RWKV raven 14B v11 Q8_0](https://huggingface.co/BlinkDL/rwkv-4-raven/resolve/main/Q8_0-RWKV-4-Raven-14B-v11x-Eng99%25-Other1%25-20230501-ctx8192.bin)
 
-Alternatively you can download one of the [raven pretrained weights from the hugging face repo](https://huggingface.co/BlinkDL/rwkv-4-raven/tree/main)
-And perform your own quantization using the [original rwkv.cpp project](https://github.com/saharNooby/rwkv.cpp)
+Alternatively you can download one of the [raven pretrained weights from the hugging face repo](https://huggingface.co/BlinkDL/rwkv-4-raven/tree/main). 
+And perform your own quantization conversion using the [original rwkv.cpp project](https://github.com/saharNooby/rwkv.cpp)
 
 # Usage
 
@@ -118,7 +118,7 @@ Completion output format
 
 ```.javascript
 // The following is a sample of the result object format
-{
+let resFormat = {
 	// Completion generated
 	completion: '<completion string used>',
 	completionTokens: [ <int values representing the completion tokens> ],
@@ -132,7 +132,8 @@ Completion output format
 		promptTokens: 41,
 		completionTokens: 64,
 		totalTokens: 105,
-		promptTokensCached: 39 // number of tokens in the prompt that was previously cached
+		// number of tokens in the prompt that was previously cached
+		promptTokensCached: 39 
 	},
 
 	// Performance statistics of the completion operation
@@ -190,8 +191,10 @@ For example "Hello" represents a single token of 12092
 
 However if I cached every prompt blindly in full, if you performed multiple calls, character by character. Each subsequent call would continue from the previous cached result in its "incomplet form".
 
-As a result when you finally call "Hello", it consist of 5 tokens, with 1 character each.
+As a result when you finally call "Hello", it can end up consisting of 5 tokens, with 1 character each. (aka ["H","e","l","l","o"])
 This leads to extreamly unexpected behaviour in the quality of the model output.
+
+While the example is an extreame case, there are smaller scale off-by-1 example regarding whitespace.
 
 # Special thanks & refrences
 
