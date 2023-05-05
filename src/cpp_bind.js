@@ -21,9 +21,9 @@ let rwkvCppLibPath = null;
 // Check which platform we're on
 if( process.arch === 'arm64' ) {
 	if( process.platform === 'darwin' ) {
-		rwkvCppLibPath = './lib/librwkv.dylib';
+		rwkvCppLibPath = './lib/librwkv-arm64.dylib';
 	} else if( process.platform === 'linux' ) {
-		rwkvCppLibPath = './lib/librwkv.so';
+		rwkvCppLibPath = './lib/librwkv-arm64.so';
 	} else {
 		throw new Error('Unsupported RWKV.cpp platform / arch: ' + process.platform + ' / ' + process.arch);
 	}
