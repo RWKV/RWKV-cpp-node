@@ -11,3 +11,4 @@ models/
 
 # Include back gitignore
 !.gitignore
+!.npmignore

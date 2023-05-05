@@ -1,0 +1,11 @@
+# Common hidden file stuff
+.*
+
+# Node modules
+node_modules
+
+# Downloaded bin weights
+**/*.bin
+raven/
+models/
+model/
