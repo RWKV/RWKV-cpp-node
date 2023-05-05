@@ -435,6 +435,8 @@ class RWKV {
 			ret.perf.completionPerSecond = 1000.0 / ret.perf.timePerCompletion;
 			ret.perf.fullPromptPerSecond = 1000.0 / ret.perf.timePerFullPrompt;
 
+			console.log(ret);
+
 			// Return the object
 			return ret;
 		}
@@ -489,6 +491,9 @@ class RWKV {
 		outputTokens.push(curTokenObj.token);
 		outputStr += tokenizer.decode([curTokenObj.token]);
 
+		// Stream the initial token
+		streamCallback(outputStr, outputStr);
+
 		// Subsequent token generation
 		// ---
 
@@ -529,8 +534,12 @@ class RWKV {
 			stateBuffer[nxtBufferIndex].outputTokens = outputTokens.slice();
 
 			// And update the output string and token array
+			let curTokenStr = tokenizer.decode([curTokenObj.token]);
 			outputTokens.push(curTokenObj.token);
-			outputStr += tokenizer.decode([curTokenObj.token]);
+			outputStr += curTokenStr;
+
+			// Stream the current token
+			streamCallback(curTokenStr, outputStr);
 
 			// Increment the buffer indexes
 			curBufferIndex = nxtBufferIndex
@@ -593,7 +602,20 @@ class RWKV {
 		// Return the result
 		return formatOutputObject();
 	}
+
+	/**
+	 * Alias to `completion({ prompt:prompt, max_tokens:0 })`
+	 * This is used to preload instruction set prompts into the cache, for later (faster) reuse
+	 * 
+	 * @param {String} prompt 
+	 */
+	preloadPrompt(prompt) {
+		this.completion({ prompt:prompt, max_tokens:0 });
+	}
 }
+
+// Provide a way for folks to use the direct CPP bind
+RWKV.cpp_bind = cpp_bind;
 
 //---------------------------
 // Module export

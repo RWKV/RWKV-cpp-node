@@ -19,7 +19,7 @@
 		"ffi-napi": "^4.0.3",
 		"lru-cache": "^9.1.1",
 		"ref-napi": "^3.0.3",
-		"rwkv-tokenizer-node": "github:PicoCreator/RWKV-tokenizer-node"
+		"rwkv-tokenizer-node": "^1.0.3"
 	},
 	"devDependencies": {
 		"chai": "^4.3.7",
