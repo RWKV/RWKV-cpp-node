@@ -15,30 +15,44 @@ const ffi = require('ffi-napi')
 // The lib path to use
 let rwkvCppLibPath = null;
 
+
+// console.log("ARCH", process.arch);
+
 // Check which platform we're on
-if( process.platform === 'win32' ) {
-	// We only do CPU feature detection in windows
-	// due to the different libraries with varients in AVX support
-	const cpuFeatures = require('cpu-features')();
-
-	// Load the highest AVX supported CPU when possible
-	if( cpuFeatures.avx512 ) {
-		rwkvCppLibPath = './lib/rwkv-avx512.dylib';
-	} else if( cpuFeatures.avx2 ) {
-		rwkvCppLibPath = './lib/rwkv-avx2.dylib';
-	} else if( cpuFeatures.avx ) {
-		rwkvCppLibPath = './lib/rwkv-avx.dylib';
+if( process.arch === 'arm64' ) {
+	if( process.platform === 'darwin' ) {
+		rwkvCppLibPath = './lib/librwkv.dylib';
+	} else if( process.platform === 'linux' ) {
+		rwkvCppLibPath = './lib/librwkv.so';
 	} else {
-		throw new Error("Missing AVX CPU support (Require 2012 or newer intel/amd CPU, if running inside a VM ensure your CPU passthrough is host)")
+		throw new Error('Unsupported RWKV.cpp platform / arch: ' + process.platform + ' / ' + process.arch);
 	}
-} else if( process.platform === 'darwin' ) {
-	rwkvCppLibPath = './lib/librwkv.dylib';
-} else if( process.platform === 'linux' ) {
-	rwkvCppLibPath = './lib/librwkv.so';
+} else if( process.arch === 'x64' ) {
+	if( process.platform === 'win32' ) {
+		// We only do CPU feature detection in windows
+		// due to the different libraries with varients in AVX support
+		const cpuFeatures = require('cpu-features')();
+	
+		// Load the highest AVX supported CPU when possible
+		if( cpuFeatures.avx512 ) {
+			rwkvCppLibPath = './lib/rwkv-avx512.dylib';
+		} else if( cpuFeatures.avx2 ) {
+			rwkvCppLibPath = './lib/rwkv-avx2.dylib';
+		} else if( cpuFeatures.avx ) {
+			rwkvCppLibPath = './lib/rwkv-avx.dylib';
+		} else {
+			throw new Error("Missing AVX CPU support (Require 2012 or newer intel/amd CPU, if running inside a VM ensure your CPU passthrough is host)")
+		}
+	} else if( process.platform === 'darwin' ) {
+		rwkvCppLibPath = './lib/librwkv.dylib';
+	} else if( process.platform === 'linux' ) {
+		rwkvCppLibPath = './lib/librwkv.so';
+	} else {
+		throw new Error('Unsupported RWKV.cpp platform / arch: ' + process.platform + ' / ' + process.arch);
+	}	
 } else {
-	throw new Error('Unsupported RWKV.cpp platform: ' + process.platform);
+	throw new Error('Unsupported RWKV.cpp arch: ' + process.arch);
 }
-
 // The lib path to use
 const rwkvCppFullLibPath = path.resolve( process.cwd(), rwkvCppLibPath);
 
