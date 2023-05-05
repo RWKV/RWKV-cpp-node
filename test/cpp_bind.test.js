@@ -21,7 +21,7 @@ const modelPath = "./raven/Q8_0-RWKV-4-Raven-7B-v11-Eng49%-Chn49%-Jpn1%-Other1%-
 //-----------------------------------------------------------
 
 // Validate the R1 action decider step
-describe("Loading the RWKV model", function() {
+describe("cpp_bind operations testing", function() {
 	// Set large timeout
 	this.timeout(60 * 1000); // 60 seconds
 

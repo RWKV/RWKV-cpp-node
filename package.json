@@ -2,7 +2,7 @@
 	"name": "rwkv-cpp-node",
 	"version": "1.0.0",
 	"description": "RWKV.cpp bindings for node.js (model not included)",
-	"main": "index.js",
+	"main": "src/RWKV.js",
 	"scripts": {
 		"test": "mocha \"./test/**/*.test.js\" --exit --trace-warnings"
 	},

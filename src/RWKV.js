@@ -3,7 +3,7 @@
 //---------------------------
 
 const os = require("os");
-const tokenizer = require("rwkv-tokenizer-noder");
+const tokenizer = require("rwkv-tokenizer-node");
 const cpp_bind = require("./cpp_bind");
 const ai_utils = require("./ai_utils");
 const { LRUCache } = require('lru-cache');
@@ -61,6 +61,9 @@ class RWKV {
 			config = { path: config };
 		}
 
+		// Store the used config
+		this._config = config;
+
 		// Get the CPU thread count
 		let threads = config.threads;
 		if( threads == null || threads <= 0 ) {
@@ -68,7 +71,7 @@ class RWKV {
 		}
 
 		// Load the cpp context
-		let ctx = cpp_bind.rwkv_init_from_file(modelPath, threads);
+		let ctx = cpp_bind.rwkv_init_from_file(config.path, threads);
 
 		// Get the state and logits size
 		this._state_size = cpp_bind.rwkv_get_state_buffer_element_count(ctx);
@@ -119,6 +122,8 @@ class RWKV {
 	//-------------
 
 	/**
+	 * @private mehthod (do not use API directly, it will not be maintained)
+	 * 
 	 * Given the existing state, and the input string, get the completed hidden state buffer.
 	 * This operation DOES NOT use the internal cache.
 	 * 
@@ -168,6 +173,8 @@ class RWKV {
 	}
 
 	/**
+	 * @private mehthod (do not use API directly, it will not be maintained)
+	 * 
 	 * Given the input string, get the hidden state buffer.
 	 * Fetching it from the internal cache when possible.
 	 * 
@@ -190,7 +197,10 @@ class RWKV {
 		// ---
 		if( this._stateCache ) {
 			// Get all the cache keys
-			let keys = this._stateCache.keys().slice();
+			let keys = [];
+			for(const key of this._stateCache.keys()) {
+				keys.push(key);
+			}
 
 			// Sort the keys by length, longest first
 			keys = keys.sort((a, b) => b.length - a.length);
@@ -222,7 +232,7 @@ class RWKV {
 		if( cachedState ) {
 			// We found a cached state, we continue from there
 			initState = cachedState.state;
-			initInput = cachedState.input;
+			initInput = cachedState.prompt;
 			initTokens = cachedState.tokens;
 
 			// Remove the cached state from the remaining input
@@ -231,7 +241,13 @@ class RWKV {
 
 		// Remaining tokens is empty, we can return the cached state
 		if( remainingInput.length == 0 ) {
-			return initState;
+			return {
+				state: cachedState.state,
+				logits: cachedState.logits,
+				prompt: input,
+				tokens: cachedState.tokens,
+				cachedTokenSize: cachedState.tokens.length
+			};
 		}
 
 		// Convert the remaining input into tokens
@@ -254,7 +270,8 @@ class RWKV {
 				state: ans.state,
 				logits: ans.logits,
 				prompt: input,
-				tokens: fullTokenArr
+				tokens: fullTokenArr,
+				cachedTokenSize: cachedState? cachedState.tokens.length : 0
 			}
 		}
 
@@ -292,7 +309,8 @@ class RWKV {
 			state: nonCachableState.state,
 			logits: nonCachableState.logits,
 			prompt: input,
-			tokens: fullTokenArr
+			tokens: fullTokenArr,
+			cachedTokenSize: cachedState? cachedState.tokens.length : 0
 		};
 	}
 
@@ -316,7 +334,7 @@ class RWKV {
 	 * 
 	 * @param {Object} options the options to use for completion, if given a string, this will be used as the prompt
 	 */
-	completions(opt) {
+	completion(opt) {
 		// ctx safety
 		this._checkContext();
 
@@ -335,6 +353,12 @@ class RWKV {
 		// The prompt state obj to use (after processing the prompt)
 		let promptStartState = null;
 
+		// The streaming callback
+		let streamCallback = opt.streamCallback || (() => {});
+
+		// Start the timer
+		let startTime = Date.now();
+
 		// Get the starting state
 		if( opt.initState ) {
 			let promptTokens = tokenizer.encode(opt.prompt);
@@ -348,14 +372,25 @@ class RWKV {
 			promptStartState = this._getHiddenState_fromFullInputString(opt.prompt);
 		}
 
+		// Propmpt completion timer
+		let promptCompletionTime = Date.now()
+
 		// The output string
 		let outputStr = "";
 		let outputTokens = [];
 
 		// Utility function, to format the output object
 		function formatOutputObject() {
+			// Get the output completion time
+			let completionTime = Date.now();
+
+			// Get the final timings
+			let promptDuration = promptCompletionTime - startTime;
+			let completionDuration = completionTime - promptCompletionTime;
+			let totalDuration = completionTime - startTime;
+
 			// Lets return with the prebuilt state and logits
-			return {
+			let ret = {
 				// The prompt used, and its tokens
 				prompt: promptStartState.prompt,
 				promptTokens: promptStartState.tokens,
@@ -373,13 +408,35 @@ class RWKV {
 				// 	logits: promptStartState.logits,
 				// }
 
-				// Usage tracking (mirror the OpenAI API)
+				// Usage tracking
 				usage: {
-					prompt_tokens: promptStartState.tokens.length,
-					completion_tokens: completionTokens.length,
-					total_tokens: promptStartState.tokens.length + completionTokens.length,
+					promptTokens: promptStartState.tokens.length,
+					completionTokens: outputTokens.length,
+					totalTokens: promptStartState.tokens.length + outputTokens.length,
+					promptTokensCached: promptStartState.cachedTokenSize || 0,
+				},
+
+				// Performance timings
+				perf: {
+					// Get timings in ms
+					promptTime: promptDuration,
+					completionTime: completionDuration,
+					totalTime: totalDuration,
+
+					// Time per token
+					timePerPrompt: promptDuration / (promptStartState.tokens.length - promptStartState.cachedTokenSize),
+					timePerCompletion: completionDuration / outputTokens.length,
+					timePerFullPrompt: promptDuration / promptStartState.tokens.length,
 				}
 			}
+
+			// Get the tokens per second
+			ret.perf.promptPerSecond = 1000.0 / ret.perf.timePerPrompt;
+			ret.perf.completionPerSecond = 1000.0 / ret.perf.timePerCompletion;
+			ret.perf.fullPromptPerSecond = 1000.0 / ret.perf.timePerFullPrompt;
+
+			// Return the object
+			return ret;
 		}
 
 		// Special handling of max_tokens = 0
@@ -537,3 +594,8 @@ class RWKV {
 		return formatOutputObject();
 	}
 }
+
+//---------------------------
+// Module export
+//---------------------------
+module.exports = RWKV;
