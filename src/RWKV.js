@@ -6,7 +6,7 @@ const os = require("os");
 const tokenizer = require("rwkv-tokenizer-node");
 const cpp_bind = require("./cpp_bind");
 const ai_utils = require("./ai_utils");
-const { LRUCache } = require('lru-cache');
+const LRUCache = require('lru-cache');
 
 //
 // Token cache offset which we use

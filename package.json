@@ -1,6 +1,6 @@
 {
 	"name": "rwkv-cpp-node",
-	"version": "1.0.4",
+	"version": "1.0.5",
 	"description": "RWKV.cpp bindings for node.js (model not included)",
 	"main": "src/RWKV.js",
 	"scripts": {
@@ -17,7 +17,7 @@
 	"dependencies": {
 		"cpu-features": "^0.0.7",
 		"ffi-napi": "^4.0.3",
-		"lru-cache": "^8.0.5",
+		"lru-cache": "^7.18.1",
 		"ref-napi": "^3.0.3",
 		"rwkv-tokenizer-node": "^1.0.3"
 	},
