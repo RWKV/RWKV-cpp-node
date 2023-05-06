@@ -5,8 +5,8 @@
 // Node deps
 const path = require("path")
 
-// Get the FFI / NAPI bindings
-const ffi = require('ffi-napi')
+// Get the koffi
+const koffi = require("koffi")
 
 //---------------------------
 // Lib selection
@@ -14,7 +14,6 @@ const ffi = require('ffi-napi')
 
 // The lib path to use
 let rwkvCppLibPath = null;
-
 
 // console.log("ARCH", process.arch);
 
@@ -70,35 +69,39 @@ const rwkvCppFullLibPath = path.resolve( __dirname, "..", rwkvCppLibPath);
 // Lib binding loading
 //---------------------------
 
-// Setup the RWKV binding
-const rwkvFFiBind = ffi.Library(
-	// The library path
-	rwkvCppFullLibPath,
+// // Setup the FFI RWKV binding
+// const rwkvFFiBind = ffi.Library(
+// 	// The library path
+// 	rwkvCppFullLibPath,
+// 	// The functions to bind
+// 	{
+// 		// rwkv_context * rwkv_init_from_file(const char * model_file_path, uint32_t n_threads);
+// 		'rwkv_init_from_file': ['pointer', ['CString', 'uint32']],
+// 		// void rwkv_free(struct rwkv_context * ctx);
+// 		'rwkv_free': ['void', ['pointer']],
+// 		// bool rwkv_eval(struct rwkv_context * ctx, int32_t token, float * state_in, float * state_out, float * logits_out);
+// 		'rwkv_eval': ['bool', ['pointer', 'int32', 'pointer', 'pointer', 'pointer']],
+// 		// uint32_t rwkv_get_state_buffer_element_count(struct rwkv_context * ctx);
+// 		'rwkv_get_state_buffer_element_count': ['uint32', ['pointer']],
+// 		// uint32_t rwkv_get_logits_buffer_element_count(struct rwkv_context * ctx);
+// 		'rwkv_get_logits_buffer_element_count': ['uint32', ['pointer']],
+// 		// bool rwkv_quantize_model_file(const char * model_file_path_in, const char * model_file_path_out, const char * format_name);
+// 		'rwkv_quantize_model_file': ['bool', ['CString', 'CString', 'CString']],
+// 		// const char * rwkv_get_system_info_string();
+// 		'rwkv_get_system_info_string': ['CString', []],
+// 	}
+// )
 
-	// The functions to bind
-	{
-		// rwkv_context * rwkv_init_from_file(const char * model_file_path, uint32_t n_threads);
-		'rwkv_init_from_file': ['pointer', ['CString', 'uint32']],
+const rwkvKoffiBind = koffi.load(rwkvCppFullLibPath);
+const ctx_pointer = koffi.pointer('CTX_HANDLE', koffi.opaque());
+const rwkv_init_from_file = rwkvKoffiBind.func('CTX_HANDLE rwkv_init_from_file(const char * model_file_path, uint32_t n_threads)');
+const rwkv_free = rwkvKoffiBind.func('void rwkv_free(CTX_HANDLE ctx)');
+const rwkv_eval = rwkvKoffiBind.func('bool rwkv_eval(CTX_HANDLE ctx, int32_t token, _Inout_ float * state_in, _Inout_ float * state_out, _Inout_ float * logits_out)');
+const rwkv_get_state_buffer_element_count = rwkvKoffiBind.func('uint32_t rwkv_get_state_buffer_element_count(CTX_HANDLE)');
+const rwkv_get_logits_buffer_element_count = rwkvKoffiBind.func('uint32_t rwkv_get_logits_buffer_element_count(CTX_HANDLE)');
 
-		// void rwkv_free(struct rwkv_context * ctx);
-		'rwkv_free': ['void', ['pointer']],
-
-		// bool rwkv_eval(struct rwkv_context * ctx, int32_t token, float * state_in, float * state_out, float * logits_out);
-		'rwkv_eval': ['bool', ['pointer', 'int32', 'pointer', 'pointer', 'pointer']],
-
-		// uint32_t rwkv_get_state_buffer_element_count(struct rwkv_context * ctx);
-		'rwkv_get_state_buffer_element_count': ['uint32', ['pointer']],
-
-		// uint32_t rwkv_get_logits_buffer_element_count(struct rwkv_context * ctx);
-		'rwkv_get_logits_buffer_element_count': ['uint32', ['pointer']],
-
-		// bool rwkv_quantize_model_file(const char * model_file_path_in, const char * model_file_path_out, const char * format_name);
-		'rwkv_quantize_model_file': ['bool', ['CString', 'CString', 'CString']],
-
-		// const char * rwkv_get_system_info_string();
-		'rwkv_get_system_info_string': ['CString', []],
-	}
-)
+const rwkv_quantize_model_file = rwkvKoffiBind.func('bool rwkv_quantize_model_file(const char * model_file_path_in, const char * model_file_path_out, const char * format_name)');
+const rwkv_get_system_info_string = rwkvKoffiBind.func('const char * rwkv_get_system_info_string()');
 
 //---------------------------
 // Module export
@@ -106,15 +109,9 @@ const rwkvFFiBind = ffi.Library(
 
 module.exports = {
 
-	// The raw binding, without jsdoc comments
-	_raw: rwkvFFiBind,
-
 	// The path to the lib used
 	_libPath: rwkvCppFullLibPath,
 
-	// ffi module used for the lib
-	_ffi: ffi,
-	
 	/**
 	 * Loads the model from a file and prepares it for inference.
 	 * Returns NULL on any error. Error messages would be printed to stderr.
@@ -124,14 +121,14 @@ module.exports = {
 	 * 
 	 * @returns {ffi_pointer} Pointer to the RWKV context.
 	 */
-	rwkv_init_from_file: rwkvFFiBind.rwkv_init_from_file,
+	rwkv_init_from_file: rwkv_init_from_file,
 
 	/**
 	 * Frees all allocated memory and the context.
 	 *
 	 * @param {ffi_pointer} ctx - Pointer to the RWKV context.
 	 **/
-	rwkv_free: rwkvFFiBind.rwkv_free,
+	rwkv_free: rwkv_free,
 
 	/**
 	 * Evaluates the model for a single token.
@@ -145,7 +142,7 @@ module.exports = {
 	 * 
 	 * @returns {Boolean} True if successful, false if not.
 	 **/
-	rwkv_eval: rwkvFFiBind.rwkv_eval,
+	rwkv_eval: rwkv_eval,
 
 	/**
 	 * Returns count of FP32 elements in state buffer.
@@ -154,7 +151,7 @@ module.exports = {
 	 * 
 	 * @returns {Number} The number of elements in the state buffer.
 	 **/
-	rwkv_get_state_buffer_element_count: rwkvFFiBind.rwkv_get_state_buffer_element_count,
+	rwkv_get_state_buffer_element_count: rwkv_get_state_buffer_element_count,
 
 	/**
 	 * Returns count of FP32 elements in logits buffer.
@@ -163,7 +160,7 @@ module.exports = {
 	 * 
 	 * @returns {Number} The number of elements in the logits buffer.
 	 **/
-	rwkv_get_logits_buffer_element_count: rwkvFFiBind.rwkv_get_logits_buffer_element_count,
+	rwkv_get_logits_buffer_element_count: rwkv_get_logits_buffer_element_count,
 
 	/**
 	 * Quantizes the model file.
@@ -183,12 +180,12 @@ module.exports = {
 	 * 
 	 * @returns {Boolean} True if successful, false if not.
 	 **/
-	rwkv_quantize_model_file: rwkvFFiBind.rwkv_quantize_model_file,
+	rwkv_quantize_model_file: rwkv_quantize_model_file,
 
 	/**
 	 * Returns a string with system information.
 	 *
 	 * @returns {String} The system information string.
 	 **/
-	rwkv_get_system_info_string: rwkvFFiBind.rwkv_get_system_info_string,
+	rwkv_get_system_info_string: rwkv_get_system_info_string,
 }

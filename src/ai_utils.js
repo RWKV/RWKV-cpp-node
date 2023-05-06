@@ -8,6 +8,9 @@ function getMaxFloat(arr) {
 	for (let i = 0; i < arr.length; i++) {
 		if (arr[i] > max) max = arr[i];
 	}
+	// if( max == 0.0 ) {
+	// 	throw "Unexpected max == 0 in getMaxFloat"
+	// }
 	return max;
 }
 
