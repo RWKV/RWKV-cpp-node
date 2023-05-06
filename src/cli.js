@@ -250,6 +250,8 @@ async function performSetup() {
 async function startChatBot(modelPath) {
 	
 	// Load the chatbot
+	console.log(`Starting RWKV chat mode`)
+	console.log(`--------------------------------------`)
 	console.log(`Loading model from ${modelPath} ...`)
 
 	const raven = new RWKV(modelPath);
