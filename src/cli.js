@@ -51,7 +51,7 @@ const RAVEN_MODELS = [
 	},
 	{ 
 		label: 'RWKV Pile 169M (Q8_0, lacks instruct tuning, use only for testing)',
-		name: "raven_14b_v11_Q8_0.bin",
+		name: "rwkv_169M_pileplus_Q8_0.bin",
 		url: 'https://huggingface.co/datasets/picocreator/rwkv-4-cpp-quantize-bin/resolve/main/RWKV-4-PilePlus-169M-Q8_0.bin',
 		sha256: '82c2949f6f9261543b13cbd1409fd2069cd67d9e2ad031bb727bb0bd43527af1',
 		size: 258391865
