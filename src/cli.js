@@ -301,10 +301,10 @@ async function startChatBot(modelPath) {
 		}]);
 
 		// Add the user input to the chat history
-		chatHistory += `${user}${interface} ${res.userInput}\n\n${bot}: `;
+		chatHistory += `${user}${interface} ${res.userInput}\n\n${bot}:`;
 
 		// Run the completion
-		process.stdout.write(`${bot}:`);
+		process.stdout.write(`${bot}: `);
 		res = raven.completion({
 			prompt: chatHistory,
 			max_tokens: 200,

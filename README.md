@@ -20,8 +20,67 @@ Along with the following benefits
 
 For more details on the math involved, and how this model works on a more technical basis. [Refer to the official project](https://github.com/BlinkDL/RWKV-LM)
 
+# JS CLI demo
 
-# JS Setup 
+If you just want to give it a spin, the fastest way is to use npx.
+First perform the setup (it will download the RWKV files into your home directory)
+
+```.bash
+# First run the setup
+npx rwkv-cpp-node --setup
+```
+
+You can then choose a model to download ...
+
+```
+--setup call detected, starting setup process...
+RWKV model will be downloaded into ~/.rwkv/
+? Select a RWKV raven model to download:  (Use arrow keys)
+❯ RWKV raven 1B5 v11 (Small, Fast) - 2.82 GB 
+  RWKV raven 7B v11 (Q8_0) - 8.09 GB 
+  RWKV raven 7B v11 (Q8_0, multilingual, performs slightly worse for english) - 8.09 GB 
+  RWKV raven 14B v11 (Q8_0) - 15.25 GB 
+  RWKV Pile 169M (Q8_0, lacks instruct tuning, use only for testing) - 0.24 GB 
+```
+
+> PS: The file size equals to the approximate amount of storage and ram your system needs
+
+Subsequently, you can run the interactive chat mode
+
+```.bash
+# Load the interactive chat
+npx rwkv-cpp-node 
+```
+
+Which would start an interactive shell session, with something like the following
+
+```
+--------------------------------------
+Starting RWKV chat mode
+--------------------------------------
+Loading model from /root/.rwkv/raven_1b5_v11.bin ...
+The following is a conversation between Bob the user and Alice the chatbot.
+--------------------------------------
+? Bob:  Hi
+Alice:  How can I help you?
+? Bob:  Tell me something interesting about ravens
+Alice:  RAVEN. I am most fascinated by the raven because of its incredible rate of survival. Ravens have been observed to live longer than any other bird, rumored to reach over 200 years old. They have the ability to live for over 1,000 years, a remarkable feat. This makes them the odd man out among birds!
+```
+
+> PS: RWKV like all chat models, can and do make up stuff.
+
+Finally if you want to run a custom model, or just run the benchmark
+
+```.bash
+# If you want to run with a pre downloaded model
+npx rwkv-cpp-node --modelPath "<path to the model bin file>"
+
+# If you want to run the "--dragon" prompt benchmark
+npx rwkv-cpp-node --dragon
+npx rwkv-cpp-node --modelPath "<path to the model bin file>" --dragon
+```
+
+# JS Lib Setup 
 
 Install the node module
 
