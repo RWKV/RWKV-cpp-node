@@ -54,7 +54,7 @@ if( process.arch === 'arm64' ) {
 	throw new Error('Unsupported RWKV.cpp arch: ' + process.arch);
 }
 // The lib path to use
-const rwkvCppFullLibPath = path.resolve( process.cwd(), rwkvCppLibPath);
+const rwkvCppFullLibPath = path.resolve( __dirname, rwkvCppLibPath);
 
 //---------------------------
 // Lib binding loading
