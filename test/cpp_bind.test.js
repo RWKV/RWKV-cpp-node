@@ -11,10 +11,17 @@ const assert = chai.assert;
 // Load dependencies
 //-----------------------------------------------------------
 
-const os = require("os")
 const cpp_bind = require("../src/cpp_bind")
 const ai_utils = require("../src/ai_utils")
-const modelPath = "./raven/Q8_0-RWKV-4-Raven-7B-v11-Eng49%-Chn49%-Jpn1%-Other1%-20230430-ctx8192.bin"
+
+// Try from the downloaded home dir first, then fallback to ./raven
+const fs = require("fs")
+const os = require("os");
+const path = require("path");
+let modelPath = path.join(os.homedir(), '.rwkv', 'RWKV-4-Raven-1B5-v11.bin');
+if( fs.existsSync(modelPath) == false ) {
+	modelPath = "./raven/RWKV-4-Raven-1B5-v11.bin";
+}
 
 //-----------------------------------------------------------
 // And perform the unit tests
@@ -54,8 +61,12 @@ describe("cpp_bind operations testing", function() {
 		state_size = cpp_bind.rwkv_get_state_buffer_element_count(ctx);
 		logits_size = cpp_bind.rwkv_get_logits_buffer_element_count(ctx);
 
-		// Validate the state and logits size, for 7B v11 model
-		assert.equal(state_size, 655360, "State size check");
+		// // Validate the state and logits size, for 7B v11 model
+		// assert.equal(state_size, 655360, "State size check");
+		// assert.equal(logits_size, 50277, "Logit size check");
+
+		// Validate the state and logits size, for 1B5 v11 model
+		assert.equal(state_size, 245760, "State size check");
 		assert.equal(logits_size, 50277, "Logit size check");
 	});
 

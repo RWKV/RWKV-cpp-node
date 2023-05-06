@@ -12,7 +12,15 @@ const assert = chai.assert;
 //-----------------------------------------------------------
 
 const RWKV = require("../src/RWKV")
-const modelPath = "./raven/RWKV-4-Raven-1B5-v11.bin"
+
+// Try from the downloaded home dir first, then fallback to ./raven
+const fs = require("fs")
+const os = require("os");
+const path = require("path");
+let modelPath = path.join(os.homedir(), '.rwkv', 'RWKV-4-Raven-1B5-v11.bin');
+if( fs.existsSync(modelPath) == false ) {
+	modelPath = "./raven/RWKV-4-Raven-1B5-v11.bin";
+}
 
 //-----------------------------------------------------------
 // Test data
