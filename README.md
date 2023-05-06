@@ -3,9 +3,12 @@
 Arguably the easiest way to get RWKV.cpp running on node.js. 
 
 ```.bash
+# Install globally
+npm install -g rwkv-cpp-node
+
 # This will start the interactive CLI, 
 # which will guide you in downloading, and running the chat model
-npx rwkv-cpp-node 
+rwkv-cpp-node
 ```
 
 > This is not a pure JS solution, and depends on the [precompiled RWKV.cpp binaries found here](https://github.com/saharNooby/rwkv.cpp)
@@ -32,8 +35,11 @@ If you just want to give it a spin, the fastest way is to use npx.
 First perform the setup (it will download the RWKV files into your home directory)
 
 ```.bash
+# Install globally
+npm install -g rwkv-cpp-node
+
 # First run the setup
-npx rwkv-cpp-node --setup
+rwkv-cpp-node --setup
 ```
 
 You can then choose a model to download ...
@@ -55,7 +61,7 @@ Subsequently, you can run the interactive chat mode
 
 ```.bash
 # Load the interactive chat
-npx rwkv-cpp-node 
+rwkv-cpp-node
 ```
 
 Which would start an interactive shell session, with something like the following
@@ -79,11 +85,11 @@ Finally if you want to run a custom model, or just run the benchmark
 
 ```.bash
 # If you want to run with a pre downloaded model
-npx rwkv-cpp-node --modelPath "<path to the model bin file>"
+rwkv-cpp-node --modelPath "<path to the model bin file>"
 
 # If you want to run the "--dragon" prompt benchmark
-npx rwkv-cpp-node --dragon
-npx rwkv-cpp-node --modelPath "<path to the model bin file>" --dragon
+rwkv-cpp-node --dragon
+rwkv-cpp-node --modelPath "<path to the model bin file>" --dragon
 ```
 
 # JS Lib Setup 
@@ -239,6 +245,10 @@ let resFormat = {
 - Utility function to download the model weights / quantize them ??
 - CLI tooling to quickly setup / download ??
 - varient of `preloadPrompt` which gurantee the saved prompt does not get cache evicted ??
+
+# Known issues
+
+- You need macOS 12 and above
 
 # How to run the unit test?
 
