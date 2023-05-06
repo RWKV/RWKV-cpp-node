@@ -21,7 +21,7 @@ Along with the following benefits
 For more details on the math involved, and how this model works on a more technical basis. [Refer to the official project](https://github.com/BlinkDL/RWKV-LM)
 
 
-# Setup 
+# JS Setup 
 
 Install the node module
 
@@ -38,7 +38,7 @@ Download one of the prequantized rwkv.cpp weights, from hugging face (raven, is 
 Alternatively you can download one of the [raven pretrained weights from the hugging face repo](https://huggingface.co/BlinkDL/rwkv-4-raven/tree/main). 
 And perform your own quantization conversion using the [original rwkv.cpp project](https://github.com/saharNooby/rwkv.cpp)
 
-# Usage
+# JS Usage
 
 ```.javascript
 const RWKV = require("RWKV-cpp-node");
