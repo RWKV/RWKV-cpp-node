@@ -326,7 +326,7 @@ class RWKV {
 	 * - max_tokens (Number) : the maximum number of tokens to generate       (default: 64)
 	 * - temperature (Number): the temperature to use for generation          (default: 1)
 	 * - top_p (Number)      : the top_p to use for generation                (default: 1)
-	 * - stop (Array<String>): the stop sequence string to use for generation (default: ["\n"])
+	 * - stop (Array<String>): the stop sequence string to use for generation (default: [])
 	 * 
 	 * The following are addtionally supported options:
 	 * - streamCallback (Function): the callback to use for streaming results
@@ -462,13 +462,16 @@ class RWKV {
 		}
 
 		// Get the stop sequence longest string length
-		let stopArr = opt.stop || ["\n"];
+		let stopArr = opt.stop || [];
 		if( stopArr instanceof String || typeof stopArr == "string" ) {
 			stopArr = [stopArr];
 		}
 
 		// Maximum length of the stop sequence
-		let stopSeqMaxLen = stopArr.reduce((a, b) => a.length > b.length ? a.length : b.length) || 0;
+		let stopSeqMaxLen = 0;
+		for(const stopStr of stopArr) {
+			stopSeqMaxLen = Math.max(stopSeqMaxLen, stopStr.length);
+		}
 
 		// Get the max token count
 		let maxTokens = opt.max_tokens || 64;
