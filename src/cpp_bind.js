@@ -42,14 +42,14 @@ if( process.arch === 'arm64' ) {
 		// Load the highest AVX supported CPU when possible
 		if( cpuFeatures == null ) {
 			// console.warn("cpu-features failed to load, assuming AVX CPU is supported")
-			rwkvCppLibPath = './lib/rwkv-avx.dylib';
+			rwkvCppLibPath = './lib/rwkv-avx.dll';
 		} else if( cpuFeatures.avx512 ) {
-			rwkvCppLibPath = './lib/rwkv-avx512.dylib';
+			rwkvCppLibPath = './lib/rwkv-avx512.dll';
 		} else if( cpuFeatures.avx2 ) {
-			rwkvCppLibPath = './lib/rwkv-avx2.dylib';
+			rwkvCppLibPath = './lib/rwkv-avx2.dll';
 		} else {
 			// AVX detection is not reliable, so if we fail to detect, we downgrade to lowest avx version
-			rwkvCppLibPath = './lib/rwkv-avx.dylib';
+			rwkvCppLibPath = './lib/rwkv-avx.dll';
 		}
 	} else if( process.platform === 'darwin' ) {
 		rwkvCppLibPath = './lib/librwkv.dylib';
