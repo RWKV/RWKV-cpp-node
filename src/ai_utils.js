@@ -13,30 +13,38 @@ function getMaxFloat(arr) {
 
 /**
  * Implements the softmax function.
- * This modifies the input array.
+ * Which reads the input array, and outputs an array of
+ * index to probability mappings.
  * 
- * @param {Float32Array} arr 
+ * @param {Float32Array} arr to read from
  * @returns 
  */
-function softmax(arr) {
+function softmaxToProbPair( arr ) {
+	// Get the logits size
+	const logits_size = arr.length;
+
+	// Setup the probability pair array
+	const probPair = new Array(logits_size);
+
 	// Get the max value
 	const max = getMaxFloat(arr);
 
 	// Subtract the max value from each element
 	// and calculate the sum of exponents
 	let sum = 0.0;
-	for (let i = 0; i < arr.length; i++) {
-		arr[i] = Math.exp(arr[i] - max);
-		sum += arr[i];
+	for (let i = 0; i < logits_size; i++) {
+		const prob = Math.exp(arr[i] - max);
+		probPair[i] = [i, prob];
+		sum += prob;
 	}
 
 	// Divide each element by the sum
-	for (let i = 0; i < arr.length; i++) {
-		arr[i] = arr[i] / sum;
+	for (let i = 0; i < logits_size; i++) {
+		probPair[i][1] = probPair[i][1] / sum;
 	}
 
-	// Return the modified array
-	return arr;
+	// Return the sorted probability pair
+	return probPair.sort((a, b) => b[1] - a[1]);
 }
 
 /**
@@ -50,6 +58,19 @@ function softmax(arr) {
  * @returns {Object} containing the token index, and the final logits
  */
 function sampleLogits(logits, temp = 1.0, top_p = 1.0) {
+	//
+	// !!! Important note !!!
+	//
+	// Because sampling function can differ between implementation.
+	// We are following blinks RWKV_in_150_lines as close as possible here.
+	// To help ensure consistency between implementations of RWKV
+	//
+	// https://github.com/BlinkDL/ChatRWKV/blob/main/RWKV_in_150_lines.py#L119
+	//
+	// This will differ from minGPT implementation (and some other implementations)
+	// https://github.com/karpathy/minGPT/blob/37baab71b9abea1b76ab957409a1cc2fbfba8a26/mingpt/model.py#L283
+	//
+
 	// Validate the logits buffer
 	if (logits == null) {
 		throw "Invalid logits buffer";
@@ -69,52 +90,32 @@ function sampleLogits(logits, temp = 1.0, top_p = 1.0) {
 	temp = temp * 1.0;
 	top_p = top_p * 1.0;
 
-	// Get the logits size
-	const logits_size = logits.length;
-
-	// Create a new array to hold the scaled logits
-	const scaled_logits = new Float32Array(logits_size);
-
-	// Scale the logits by the temperature
-	for (let i = 0; i < logits_size; i++) {
-		scaled_logits[i] = logits[i] / temp;
-	}
-
-	// Apply softmax to obtain probabilities
-	const probs = softmax(scaled_logits);
-	
 	// Change into a list of [index, prob] pairs
-	let probPairs = [];
-	for (let i = 0; i < probs.length; i++) {
-		probPairs.push([i, probs[i]]);
+	// while applying softmax at the same time
+	let probPairs = softmaxToProbPair(logits);
+
+	// Get the cumulative probability pre and post temp scaling
+	let cumSoftmaxProb = 0.0;
+	let cumTempProb = 0.0;
+	for (let i = 0; i < probPairs.length; i++) {
+		const tempProb = Math.pow(probPairs[i][1], 1.0 / temp);
+		cumSoftmaxProb += probPairs[i][1];
+		cumTempProb += tempProb;
+		probPairs[i][1] = tempProb;
+
+		// Top_p filtering
+		// ---
+		// If top_p is is valid and
+		// If we have reached the top_p threshold, then break
+		// This is done here to avoid the need to loop again
+		if (top_p < 1.0 && cumTempProb >= top_p) {
+			probPairs = probPairs.slice(0, i + 1);
+			break;
+		}
 	}
-
-	// Sort the pairs by probability
-	probPairs.sort((a, b) => b[1] - a[1]);
-
-	// Calculate the cumulative probability
-	let cumProb = 0.0;
 	
-	// Apply top_p filtering
-	if (top_p < 1.0) {
-		for (let i = 0; i < probPairs.length; i++) {
-			cumProb += probPairs[i][1];
-
-			// If we have reached the top_p threshold, then break
-			if (cumProb >= top_p) {
-				probPairs = probPairs.slice(0, i + 1);
-				break;
-			}
-		}
-	} else {
-		// If top_p is 1.0, then we just use the full list
-		for (let i = 0; i < probPairs.length; i++) {
-			cumProb += probPairs[i][1];
-		}
-	}
-
 	// Time to sample 
-	let randProb = Math.random() * cumProb;
+	let randProb = Math.random() * cumTempProb;
 
 	// Find the index of the sampled token
 	for(let i = 0; i < probPairs.length; i++) {
@@ -141,6 +142,6 @@ function sampleLogits(logits, temp = 1.0, top_p = 1.0) {
 // Module exports
 module.exports = {
 	sampleLogits,
-	softmax,
+	softmaxToProbPair,
 	getMaxFloat
 }
