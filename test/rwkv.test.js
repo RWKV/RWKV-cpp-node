@@ -70,7 +70,6 @@ describe("RWKV.js instance test", function() {
 
 		// Log the result
 		console.log( "Prompt and completion - dragon prompt result : ", res.completion.trim() );
-		console.log( "Prompt and completion - dragon prompt token count : ", res.completionTokens.length );
 		console.log( "Prompt and completion - prompt tokens per second : ", res.perf.promptPerSecond );
 		console.log( "Prompt and completion - completion tokens per second : ", res.perf.completionPerSecond );
 	});
