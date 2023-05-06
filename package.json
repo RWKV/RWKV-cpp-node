@@ -20,10 +20,9 @@
 	"license": "MIT",
 	"dependencies": {
 		"inquirer": "^8.2.4",
-		"progress": "^2.0.3",
-		"ffi-napi": "^4.0.3",
-		"ref-napi": "^3.0.3",
+		"koffi": "^2.3.19",
 		"lru-cache": "^7.18.1",
+		"progress": "^2.0.3",
 		"rwkv-tokenizer-node": "^1.0.3"
 	},
 	"optionalDependencies": {
