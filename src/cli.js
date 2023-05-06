@@ -309,7 +309,8 @@ async function startChatBot(modelPath) {
 			},
 			stop: ["\nBob:", "\nbob:"]
 		});
-		chatHistory += `${res.completetion.trim()}\n\n`;
+		// console.log(res);
+		chatHistory += `${res.completion.trim()}\n\n`;
 	}
 }
 
