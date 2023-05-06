@@ -321,6 +321,7 @@ async function startChatBot(modelPath) {
 async function runDragonPrompt(modelPath) {
 	// Load the chatbot
 	console.log(`Loading model from ${modelPath} ...`)
+	console.log(`--------------------------------------`)
 	const raven = new RWKV(modelPath);
 
 	// The demo prompt for RWKV
@@ -338,6 +339,7 @@ async function runDragonPrompt(modelPath) {
 	});
 
 	// Log the stats
+	console.log(`--------------------------------------`)
 	console.log(`\n\nRWKV perf stats: \n${JSON.stringify(res.perf)}`);
 }
 

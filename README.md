@@ -3,7 +3,8 @@
 Arguably the easiest way to get RWKV.cpp running on node.js. 
 
 ```.bash
-# This will start the interactive CLI, which will guide you in downloading, and running the chat model
+# This will start the interactive CLI, 
+# which will guide you in downloading, and running the chat model
 npx rwkv-cpp-node 
 ```
 

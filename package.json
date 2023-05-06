@@ -21,11 +21,13 @@
 	"dependencies": {
 		"inquirer": "^8.2.4",
 		"progress": "^2.0.3",
-		"cpu-features": "^0.0.7",
 		"ffi-napi": "^4.0.3",
 		"ref-napi": "^3.0.3",
 		"lru-cache": "^7.18.1",
 		"rwkv-tokenizer-node": "^1.0.3"
+	},
+	"optionalDependencies": {
+		"cpu-features": "^0.0.7"
 	},
 	"devDependencies": {
 		"chai": "^4.3.7",

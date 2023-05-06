@@ -31,10 +31,20 @@ if( process.arch === 'arm64' ) {
 	if( process.platform === 'win32' ) {
 		// We only do CPU feature detection in windows
 		// due to the different libraries with varients in AVX support
-		const cpuFeatures = require('cpu-features')();
+		//
+		// Note as this is an optional dependency, it can fail to load
+		let cpuFeatures = null;
+		try {
+			cpuFeatures = require('cpu-features')();
+		} catch( err ) {
+			// Silently ignore, we assume avx
+		}
 	
 		// Load the highest AVX supported CPU when possible
-		if( cpuFeatures.avx512 ) {
+		if( cpuFeatures == null ) {
+			console.warn("cpu-features failed to load, assuming AVX CPU is supported")
+			rwkvCppLibPath = './lib/rwkv-avx.dylib';
+		} else if( cpuFeatures.avx512 ) {
 			rwkvCppLibPath = './lib/rwkv-avx512.dylib';
 		} else if( cpuFeatures.avx2 ) {
 			rwkvCppLibPath = './lib/rwkv-avx2.dylib';
