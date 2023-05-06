@@ -15,6 +15,7 @@
 		"LLM",
 		"RWKV.cpp"
 	],
+	"homepage": "https://github.com/RWKV/RWKV-cpp-node/",
 	"author": "Eugene Cheah (@picocreator)",
 	"license": "MIT",
 	"dependencies": {
