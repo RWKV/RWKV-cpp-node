@@ -1,6 +1,6 @@
 {
 	"name": "rwkv-cpp-node",
-	"version": "1.1.13",
+	"version": "1.1.14",
 	"description": "RWKV.cpp bindings for node.js (model not included)",
 	"main": "src/RWKV.js",
 	"scripts": {
@@ -20,7 +20,7 @@
 	"license": "MIT",
 	"dependencies": {
 		"inquirer": "^9.2.1",
-		"koffi": "^2.3.19",
+		"koffi": "=2.3.9",
 		"lru-cache": "^7.18.1",
 		"progress": "^2.0.3",
 		"rwkv-tokenizer-node": "^1.0.3"
