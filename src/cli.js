@@ -250,6 +250,7 @@ async function performSetup() {
 async function startChatBot(modelPath) {
 	
 	// Load the chatbot
+	console.log(`--------------------------------------`)
 	console.log(`Starting RWKV chat mode`)
 	console.log(`--------------------------------------`)
 	console.log(`Loading model from ${modelPath} ...`)
@@ -282,6 +283,7 @@ async function startChatBot(modelPath) {
 
 	// Log the start of the conversation
 	console.log(`The following is a conversation between ${user} the user and ${bot} the chatbot.`)
+	console.log(`--------------------------------------`)
 
 	// The chat history
 	let chatHistory = prompt;
