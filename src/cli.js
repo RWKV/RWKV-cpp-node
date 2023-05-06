@@ -9,8 +9,9 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const ProgressBar = require('progress');
-const inquirer = require('inquirer');
 const RWKV = require("./RWKV");
+
+const inquirerPromise = import('inquirer');
 
 // ---------------------------
 // Configs and paths
@@ -74,7 +75,7 @@ async function promptModelSelection() {
 		name: `${model.label} - ${(model.size/1024/1024/1024).toFixed(2)} GB`,
 		value: model,
 	}));
-	const { model } = await inquirer.prompt({
+	const { model } = await (await inquirerPromise).default.prompt({
 		type: 'list',
 		name: 'model',
 		message: 'Select a RWKV raven model to download: ',
@@ -291,7 +292,7 @@ async function startChatBot(modelPath) {
 	// Lets start the loop
 	while(true) {
 		// Get the user input
-		let res = await inquirer.prompt([{
+		let res = await (await inquirerPromise).default.prompt([{
 			type: 'input',
 			name: 'userInput',
 			message: `${user}${interface} `,

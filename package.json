@@ -19,7 +19,7 @@
 	"author": "Eugene Cheah (@picocreator)",
 	"license": "MIT",
 	"dependencies": {
-		"inquirer": "^8.2.4",
+		"inquirer": "^9.2.1",
 		"koffi": "^2.3.19",
 		"lru-cache": "^7.18.1",
 		"progress": "^2.0.3",
