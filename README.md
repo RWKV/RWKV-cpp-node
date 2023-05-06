@@ -121,11 +121,9 @@ Completion output format
 let resFormat = {
 	// Completion generated
 	completion: '<completion string used>',
-	completionTokens: [ <int values representing the completion tokens> ],
 
 	// Prompt used
 	prompt: '<prompt string used>',
-	promptTokens: [ <int values representing the prompt tokens> ],
 
 	// Token usage numbers
 	usage: {

@@ -12,7 +12,7 @@ const assert = chai.assert;
 //-----------------------------------------------------------
 
 const RWKV = require("../src/RWKV")
-const modelPath = "./raven/Q8_0-RWKV-4-Raven-7B-v11-Eng49%-Chn49%-Jpn1%-Other1%-20230430-ctx8192.bin"
+const modelPath = "./raven/RWKV-4-Raven-1B5-v11.bin"
 
 //-----------------------------------------------------------
 // Test data

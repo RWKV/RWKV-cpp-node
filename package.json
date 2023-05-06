@@ -6,6 +6,9 @@
 	"scripts": {
 		"test": "mocha \"./test/**/*.test.js\" --exit --trace-warnings"
 	},
+	"bin": {
+		"rwkv-cpp-node": "./src/cli.js"
+	},
 	"keywords": [
 		"RWKV",
 		"AI",
@@ -15,10 +18,12 @@
 	"author": "Eugene Cheah (@picocreator)",
 	"license": "MIT",
 	"dependencies": {
+		"inquirer": "^8.2.4",
+		"progress": "^2.0.3",
 		"cpu-features": "^0.0.7",
 		"ffi-napi": "^4.0.3",
-		"lru-cache": "^7.18.1",
 		"ref-napi": "^3.0.3",
+		"lru-cache": "^7.18.1",
 		"rwkv-tokenizer-node": "^1.0.3"
 	},
 	"devDependencies": {
@@ -26,7 +31,7 @@
 		"chai-as-promised": "^7.1.1",
 		"mocha": "^10.2.0"
 	},
-	"engines" : { 
-		"node" : ">=18.0.0"
+	"engines": {
+		"node": ">=18.0.0"
 	}
 }

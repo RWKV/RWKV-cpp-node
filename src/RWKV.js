@@ -324,8 +324,8 @@ class RWKV {
 	 * The following options are supported (same behavior as the OpenAI API):
 	 * - prompt (String)     : the prompt to use for completion, if used with hidden state, prompt will be appended to existing state
 	 * - max_tokens (Number) : the maximum number of tokens to generate       (default: 64)
-	 * - temperature (Number): the temperature to use for generation          (default: 1)
-	 * - top_p (Number)      : the top_p to use for generation                (default: 1)
+	 * - temperature (Number): the temperature to use for generation          (default: 1.0)
+	 * - top_p (Number)      : the top_p to use for generation                (default: 1.0)
 	 * - stop (Array<String>): the stop sequence string to use for generation (default: [])
 	 * 
 	 * The following are addtionally supported options:
@@ -353,9 +353,6 @@ class RWKV {
 		// The prompt state obj to use (after processing the prompt)
 		let promptStartState = null;
 
-		// The streaming callback
-		let streamCallback = opt.streamCallback || (() => {});
-
 		// Start the timer
 		let startTime = Date.now();
 
@@ -375,14 +372,51 @@ class RWKV {
 		// Propmpt completion timer
 		let promptCompletionTime = Date.now()
 
+		// Get the stop sequence longest string length
+		let stopArr = opt.stop || [];
+		if( stopArr instanceof String || typeof stopArr == "string" ) {
+			stopArr = [stopArr];
+		}
+
+		// Maximum length of the stop sequence
+		let stopSeqMaxLen = 0;
+		for(const stopStr of stopArr) {
+			stopSeqMaxLen = Math.max(stopSeqMaxLen, stopStr.length);
+		}
+		
 		// The output string
 		let outputStr = "";
 		let outputTokens = [];
+
+		// The streamed position
+		let outputStream = opt.streamCallback;
+		let streamPos = 0;
+
+		// The stop sequence which as matched (if any)
+		let stopSeqMatched = null;
 
 		// Utility function, to format the output object
 		function formatOutputObject() {
 			// Get the output completion time
 			let completionTime = Date.now();
+
+			// The final output str
+			let finalOutputStr = outputStr;
+
+			// Prepare final output string, if stop sequence was matched, we remove it from the output
+			if( stopSeqMatched ) {
+				let lastIndex = outputStr.lastIndexOf(stopSeqMatched);
+				finalOutputStr = outputStr.substring(0, lastIndex);
+			}
+
+			// Handle output streaming
+			if( outputStream ) {
+				let streamLimit = finalOutputStr.length;
+				if( streamLimit > 0 && streamLimit > streamPos ) {
+					outputStream(outputStr.slice(streamPos, streamLimit));
+					streamPos = streamLimit;
+				}
+			}
 
 			// Get the final timings
 			let promptDuration = promptCompletionTime - startTime;
@@ -391,13 +425,11 @@ class RWKV {
 
 			// Lets return with the prebuilt state and logits
 			let ret = {
-				// The prompt used, and its tokens
+				// The prompt used
 				prompt: promptStartState.prompt,
-				promptTokens: promptStartState.tokens,
 
 				// The completion string
-				completion: outputStr,
-				completionTokens: outputTokens,
+				completion: finalOutputStr,
 
 				// // Last RWKV internal state
 				// // useful for dev / debugging
@@ -434,8 +466,7 @@ class RWKV {
 			ret.perf.promptPerSecond = 1000.0 / ret.perf.timePerPrompt;
 			ret.perf.completionPerSecond = 1000.0 / ret.perf.timePerCompletion;
 			ret.perf.fullPromptPerSecond = 1000.0 / ret.perf.timePerFullPrompt;
-
-			console.log(ret);
+			// console.log(ret);
 
 			// Return the object
 			return ret;
@@ -461,18 +492,6 @@ class RWKV {
 			}
 		}
 
-		// Get the stop sequence longest string length
-		let stopArr = opt.stop || [];
-		if( stopArr instanceof String || typeof stopArr == "string" ) {
-			stopArr = [stopArr];
-		}
-
-		// Maximum length of the stop sequence
-		let stopSeqMaxLen = 0;
-		for(const stopStr of stopArr) {
-			stopSeqMaxLen = Math.max(stopSeqMaxLen, stopStr.length);
-		}
-
 		// Get the max token count
 		let maxTokens = opt.max_tokens || 64;
 
@@ -494,18 +513,12 @@ class RWKV {
 		outputTokens.push(curTokenObj.token);
 		outputStr += tokenizer.decode([curTokenObj.token]);
 
-		// Stream the initial token
-		streamCallback(outputStr, outputStr);
-
 		// Subsequent token generation
 		// ---
 
 		// The current buffer index
 		let curBufferIndex = 0;
 		let nxtBufferIndex = 1;
-
-		// The stop sequence which as matched (if any)
-		let stopSeqMatched = null;
 
 		// !!! main token gen loop
 		// ---
@@ -515,7 +528,7 @@ class RWKV {
 		for(let i=1; i<maxTokens; i++) {
 			// Get the current state
 			let curState = stateBuffer[curBufferIndex].state;
-			let curLogits = stateBuffer[curBufferIndex].logits;
+			// let curLogits = stateBuffer[curBufferIndex].logits;
 
 			// Get the target next state
 			let nxtState = stateBuffer[nxtBufferIndex].state;
@@ -541,9 +554,6 @@ class RWKV {
 			outputTokens.push(curTokenObj.token);
 			outputStr += curTokenStr;
 
-			// Stream the current token
-			streamCallback(curTokenStr, outputStr);
-
 			// Increment the buffer indexes
 			curBufferIndex = nxtBufferIndex
 			nxtBufferIndex++;
@@ -558,7 +568,7 @@ class RWKV {
 
 				// Check if any of the stop sequences match
 				for(const stopSeq of stopArr) {
-					if( lastXStr.indexOf(stopSeq) ) {
+					if( lastXStr.indexOf(stopSeq) >= 0 ) {
 						stopSeqMatched = stopSeq;
 						break;
 					}
@@ -566,6 +576,15 @@ class RWKV {
 
 				if(stopSeqMatched) {
 					break;
+				}
+			}
+
+			// Handle output streaming
+			if( outputStream ) {
+				let streamLimit = outputStr.length - stopSeqMaxLen*2;
+				if( streamLimit > 0 && streamLimit > streamPos ) {
+					outputStream(outputStr.slice(streamPos, streamLimit));
+					streamPos = streamLimit;
 				}
 			}
 		}
