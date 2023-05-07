@@ -6,6 +6,20 @@ module.exports = [
 		sha256: "098c6ea8368f68317c99283195651685bdaac417857a21e447eadced2e62f8eb",
 		size: 3031328341
 	},
+	{
+		label: 'RWKV raven 3B v11 (Small, Fast)',
+		name: "raven_3b_v11.bin",
+		url: "https://huggingface.co/datasets/picocreator/rwkv-4-cpp-quantize-bin/resolve/main/RWKV-4-Raven-3B-v11.bin",
+		sha256: "20c1cbb2fce41a0e045d866ebb6766153c4f62cc8fee89091b61eae6603b6969",
+		size: 5971101117
+	},
+	{
+		label: 'RWKV raven 3B v11 (Small, Fast, multilingual)',
+		name: "raven_3b_v11_multilingual.bin",
+		url: "https://huggingface.co/datasets/picocreator/rwkv-4-cpp-quantize-bin/resolve/main/RWKV-4-Raven-3B-v11-multilingual.bin",
+		sha256: "df91cd6962340f9d5610b2fb51cc134de43a356bb9830c41a2bc6cd81cd2703d",
+		size: 5971101117
+	},
 	{ 
 		label: 'RWKV raven 7B v11 (Q8_0)', 
 		name: "raven_7b_v11_Q8_0.bin",
@@ -35,7 +49,7 @@ module.exports = [
 		size: 28301772069
 	},
 	{ 
-		label: 'RWKV Pile 169M (Q8_0, lacks tuning, use for testing)',
+		label: 'RWKV Pile 169M (Q8_0, really dumb, use for testing)',
 		name: "rwkv_169M_pileplus_Q8_0.bin",
 		url: 'https://huggingface.co/datasets/picocreator/rwkv-4-cpp-quantize-bin/resolve/main/RWKV-4-PilePlus-169M-Q8_0.bin',
 		sha256: '82c2949f6f9261543b13cbd1409fd2069cd67d9e2ad031bb727bb0bd43527af1',
