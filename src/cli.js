@@ -306,6 +306,7 @@ async function runDragonPrompt(modelPath) {
 	});
 
 	// Log the stats
+	console.log("");
 	console.log(`--------------------------------------`)
 	console.log(`\n\nRWKV perf stats: \n${JSON.stringify(res.perf)}`);
 }
