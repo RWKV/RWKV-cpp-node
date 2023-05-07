@@ -34,11 +34,11 @@ const DOWNLOAD_CHUNK_SIZE = 1024;
 **/
 async function promptModelSelection() {
 	console.log(`--------------------------------------`)
-	console.log('RWKV model will be downloaded into ~/.rwkv/');
+	console.log('RWKV Raven models will be downloaded into ~/.rwkv/');
 	console.log('Listed file sizes + 1 : is the approximate amount of RAM your system will need');
 	console.log(`--------------------------------------`)
 	const choices = RWKV_MODELS.map((model) => ({
-		name: `${model.label} - ${(model.size/1024/1024/1024).toFixed(2)} GB`,
+		name: `${(model.size/1024/1024/1024).toFixed(2)} GB - ${model.label}`,
 		value: model,
 	}));
 	const { model } = await (await inquirerPromise).default.prompt({
