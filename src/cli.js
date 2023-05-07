@@ -20,44 +20,7 @@ const inquirerPromise = import('inquirer');
 /**
 * Prequantized raven .cpp models and their paths
 */
-const RAVEN_MODELS = [
-	{
-		label: 'RWKV raven 1B5 v11 (Small, Fast)',
-		name: "raven_1b5_v11.bin",
-		url: "https://huggingface.co/datasets/picocreator/rwkv-4-cpp-quantize-bin/resolve/main/RWKV-4-Raven-1B5-v11.bin",
-		sha256: "098c6ea8368f68317c99283195651685bdaac417857a21e447eadced2e62f8eb",
-		size: 3031328341
-	},
-	{ 
-		label: 'RWKV raven 7B v11 (Q8_0)', 
-		name: "raven_7b_v11_Q8_0.bin",
-		url: 'https://huggingface.co/BlinkDL/rwkv-4-raven/resolve/main/Q8_0-RWKV-4-Raven-7B-v11x-Eng99%25-Other1%25-20230429-ctx8192.bin',
-		sha256: '75d252da63405e9897bff2957f9b6b1c94d496a50e4772d5fc1ec22fb048f9b5',
-		size: 8681332157
-	},
-	{ 
-		label: 'RWKV raven 7B v11 (Q8_0, multilingual, performs slightly worse for english)', 
-		name: "raven_7b_v11_Q8_0_multilingual.bin",
-		url: 'https://huggingface.co/BlinkDL/rwkv-4-raven/resolve/main/Q8_0-RWKV-4-Raven-7B-v11-Eng49%25-Chn49%25-Jpn1%25-Other1%25-20230430-ctx8192.bin',
-		sha256: 'ee4a6e7fbf9c2bd3558e4a92dbf16fd25d8599c7bef379ba91054981a8f665e0',
-		size: 8681332157
-	},
-	{ 
-		label: 'RWKV raven 14B v11 (Q8_0)',
-		name: "raven_14b_v11_Q8_0.bin",
-		url: 'https://huggingface.co/BlinkDL/rwkv-4-raven/resolve/main/Q8_0-RWKV-4-Raven-14B-v11x-Eng99%25-Other1%25-20230501-ctx8192.bin',
-		sha256: '1cb56cd7784264a8f0ed2efd17a97f4866075915f2b1a8497c1abb826edade8b',
-		size: 16374220069
-	},
-	{ 
-		label: 'RWKV Pile 169M (Q8_0, lacks instruct tuning, use only for testing)',
-		name: "rwkv_169M_pileplus_Q8_0.bin",
-		url: 'https://huggingface.co/datasets/picocreator/rwkv-4-cpp-quantize-bin/resolve/main/RWKV-4-PilePlus-169M-Q8_0.bin',
-		sha256: '82c2949f6f9261543b13cbd1409fd2069cd67d9e2ad031bb727bb0bd43527af1',
-		size: 258391865
-	}
-];
-
+const RWKV_MODELS = require("./rwkv_models");
 const RWKV_CLI_DIR = path.join(os.homedir(), '.rwkv');
 const CONFIG_FILE = path.join(RWKV_CLI_DIR, 'config.json');
 const DOWNLOAD_CHUNK_SIZE = 1024;
@@ -71,7 +34,7 @@ const DOWNLOAD_CHUNK_SIZE = 1024;
 **/
 async function promptModelSelection() {
 	console.log('RWKV model will be downloaded into ~/.rwkv/');
-	const choices = RAVEN_MODELS.map((model) => ({
+	const choices = RWKV_MODELS.map((model) => ({
 		name: `${model.label} - ${(model.size/1024/1024/1024).toFixed(2)} GB`,
 		value: model,
 	}));
@@ -381,7 +344,7 @@ async function runDragonPrompt(modelPath) {
 		}
 	
 		// Get the model config
-		const model = RAVEN_MODELS.find((model) => model.name === modelName);
+		const model = RWKV_MODELS.find((model) => model.name === modelName);
 		if (!model) {
 			console.error(`Model ${modelName} not found, you may need to run --setup again`);
 			return;
