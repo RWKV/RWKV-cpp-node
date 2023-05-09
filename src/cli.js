@@ -108,6 +108,14 @@ async function downloadModelRaw(model) {
 	}
 	await processData();
 
+	// Validate the model
+	console.log(`Validating downloaded model ...`)
+	if( (await validateModel(model)) == false ) {
+		console.log(`Model validation failed, run the --setup command again (mismatched size/sha256)`)
+		process.exit(1);
+	} else {
+		console.log(`Model validation passed!`)
+	}
 	return destinationPath;
 }
 
@@ -132,6 +140,27 @@ function sha256File(filePath) {
 		
 		input.on('error', reject);
 	});
+}
+
+/**
+ * Validate if the downloaded model matches, and fail if it doesn't
+ * @param {*} model 
+ */
+async function validateModel(model) {
+	const modelPath = path.join(RWKV_CLI_DIR, `${model.name}`);
+	
+	// If the model already exists, return it
+	if (fs.existsSync(modelPath)) {
+		const stats = fs.statSync(modelPath);
+		if (stats.size === model.size) {
+			// Check if the file is the right sha256 hash
+			const hash = await sha256File(modelPath);
+			if (hash === model.sha256) {
+				return true;
+			}
+		}
+	}
+	return false;
 }
 
 /**
