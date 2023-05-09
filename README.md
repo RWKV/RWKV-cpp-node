@@ -31,7 +31,7 @@ For more details on the math involved, and how this model works on a more techni
 
 # JS CLI demo
 
-If you just want to give it a spin, the fastest way is to use npx.
+If you just want to give it a spin, the fastest way is to use npm.
 First perform the setup (it will download the RWKV files into your home directory)
 
 ```.bash
