@@ -21,6 +21,13 @@ module.exports = [
 		size: 8681332157
 	},
 	{ 
+		label: 'raven 7B v11x', 
+		name: "raven_7b_v11x.bin",
+		url: 'https://huggingface.co/datasets/picocreator/rwkv-4-cpp-quantize-bin/resolve/main/RWKV-4-Raven-7B-v11x.bin',
+		sha256: '9e6886514a5c1162b760ae6ce873e71b8934d7e457b680b8cd7dcbfc4e118c8f',
+		size: 14788238781
+	},
+	{ 
 		label: 'raven 14B v11 (Q8_0, Bigger, better)',
 		name: "raven_14b_v11_Q8_0.bin",
 		url: 'https://huggingface.co/BlinkDL/rwkv-4-raven/resolve/main/Q8_0-RWKV-4-Raven-14B-v11x-Eng99%25-Other1%25-20230501-ctx8192.bin',
@@ -28,7 +35,7 @@ module.exports = [
 		size: 16374220069
 	},
 	{ 
-		label: 'raven 14B v11 (Best results, slowest perf)',
+		label: 'raven 14B v11x (Best results, slowest perf)',
 		name: "raven_14b_v11x.bin",
 		url: 'https://huggingface.co/datasets/picocreator/rwkv-4-cpp-quantize-bin/resolve/main/RWKV-4-Raven-14B-V11x.bin',
 		sha256: 'f25f80555c840ad42b19411ca50788632eae9a714028b5d2431f6525d3296bce',
