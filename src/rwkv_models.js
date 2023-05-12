@@ -13,13 +13,13 @@ module.exports = [
 		sha256: "20c1cbb2fce41a0e045d866ebb6766153c4f62cc8fee89091b61eae6603b6969",
 		size: 5971101117
 	},
-	{ 
-		label: 'raven 7B v11 (Q4_2, Small, Fast)', 
-		name: "raven_7b_v11_Q4_2.bin",
-		url: 'https://huggingface.co/datasets/picocreator/rwkv-4-cpp-quantize-bin/resolve/main/RWKV-4-Raven-7B-v11x-Q4_2.bin',
-		sha256: '0ed3e59bc123ec84a561948e0643809ccc73d7900ee0078fe48b13bfbcb7711f',
-		size: 5191671229
-	},
+	// { 
+	// 	label: 'raven 7B v11 (Q4_2, Small, Fast)', 
+	// 	name: "raven_7b_v11_Q4_2.bin",
+	// 	url: 'https://huggingface.co/datasets/picocreator/rwkv-4-cpp-quantize-bin/resolve/main/RWKV-4-Raven-7B-v11x-Q4_2.bin',
+	// 	sha256: '0ed3e59bc123ec84a561948e0643809ccc73d7900ee0078fe48b13bfbcb7711f',
+	// 	size: 5191671229
+	// },
 	{ 
 		label: 'raven 7B v11 (Q5_1, Small, Fast)', 
 		name: "raven_7b_v11_Q5_1.bin",
