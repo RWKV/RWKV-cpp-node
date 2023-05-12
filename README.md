@@ -287,20 +287,16 @@ While the example is an extreame case, there are smaller scale off-by-1 example 
 
 # Time taken per token completion
 
-| Model Size | Download Size | RAM usage | AWS c6g.4xlarge (arm64, 8 Core, 16 vCPU) | AWS c6gd.16xlarge (arm64, 32 Core, 64 vCPU) | My Gaming Computer: AMD Ryzen 7 3700X  (x64, 8 Core, 16 vCPU) | Oracle A1  (4 Cores) |
-|------------|---------------|-----------|------------------------------------------|---------------------------------------------|---------------------------------------------------------------|----------------------|
-| 1.5B       | 2.82 GB       | ~ 3.0 GB  | 94.699 ms                                | 81.497 ms                                   | 283.681 ms                                                    | 177.025 ms           |
-| 3B         | 5.56 GB       | ~ 5.7 GB  | 139.038 ms                               | 109.676 ms                                  | 455.975 ms                                                    |                      |
-| 7B (Q4_3)  | 8.09 GB       | ~ 6.3 GB  |                                          |                                             |                                                               |                      |
-| 7B (Q5_1)  | 8.09 GB       | ~ 7.1 GB  |                                          |                                             |                                                               |                      |
-| 7B (Q8_0)  | 8.09 GB       | ~ 8.3 GB  | 167.148 ms                               | 126.856 ms                                  | 406.984 ms                                                    |                      |
-| 7B         | 13.77 GB      | ~ 14.9 GB | 259.888 ms                               | 175.069 ms                                  |                                                               |                      |
-| 14B (Q4_3) | 15.25 GB      | ~ 16.4 GB | 269.201 ms                               | 199.114 ms                                  |                                                               |                      |
-| 14B (Q5_1) | 15.25 GB      | ~ 16.4 GB | 269.201 ms                               | 199.114 ms                                  |                                                               |                      |
-| 14B (Q8_0) | 15.25 GB      | ~ 16.4 GB | 269.201 ms                               | 199.114 ms                                  |                                                               |                      |
-| 14B        | 26.36 GB      | ~ 27.9 GB | 460.963 ms                               | 273.277 ms                                  |                                                               |                      |
+| Model Size | Download Size | RAM usage | AWS c6g.4xlarge (arm64, 8 Core, 16 vCPU) | AWS c6gd.16xlarge (arm64, 32 Core, 64 vCPU) | M2 Pro, Mac Mini  (6 P core + 4 E core) | Oracle A1 (4 Cores) | AMD Ryzen 7 3700X (x64, 8 Core, 16 vCPU) |
+|------------|---------------|-----------|------------------------------------------|---------------------------------------------|-----------------------------------------|---------------------|------------------------------------------|
+| 1.5B       | 2.82 GB       | ~ 3.0 GB  | 94.699 ms                                | 81.497 ms                                   | 57.448 ms                               | 177.025 ms          | 283.681 ms                               |
+| 3B         | 5.56 GB       | ~ 5.7 GB  | 139.038 ms                               | 109.676 ms                                  | 103.013 ms                              |                     | 564.116 ms                               |
+| 7B (Q8_0)  | 8.09 GB       | ~ 8.3 GB  | 167.148 ms                               | 126.856 ms                                  | 134.719 ms                              |                     | 406.984 ms                               |
+| 7B         | 13.77 GB      | ~ 14.9 GB | 259.888 ms                               | 175.069 ms                                  |                                         |                     | 729.948 ms                               |
+| 14B (Q8_0) | 15.25 GB      | ~ 16.4 GB | 269.201 ms                               | 199.114 ms                                  |                                         |                     |                                          |
+| 14B        | 26.36 GB      | ~ 27.9 GB | 460.963 ms                               | 273.277 ms                                  |                                         |                     |                                          |
 
-** Note: There are know performance bottleneck issue in the tokenizer, and sampler written in nodejs, as its a single threaded operation, between each "token" in nodejs. And would penalize smaller model more then larger models.
+** Note: There are know performance bottleneck issue in the tokenizer, and sampler written in nodejs, as its a single threaded operation, between each "token" in nodejs (which takes ~10ms). And would penalize smaller model more then larger models.
 
 The above is done by downloading the respective model via `rwkv-cpp-node --setup`, and performing the `rwkv-cpp-node --dragon` benchmark. Which would give the following JSON at the end
 
@@ -310,3 +306,5 @@ The above is done by downloading the respective model via `rwkv-cpp-node --setup
 ```
 
 timePerCompletion : is then extracted and used in the above table.
+
+> Minor notes: 7B (Q5_1) uses ~ 7.1 GB ram, 7B (Q4_3) uses ~ 6.3 GB ram, making them ideal targets for 8GB ram systems
