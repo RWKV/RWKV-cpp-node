@@ -285,7 +285,7 @@ While the example is an extreame case, there are smaller scale off-by-1 example 
 
 - https://github.com/BlinkDL/RWKV-LM
 
-# Time taken for token completion
+# Time taken per token completion
 
 | Model Size | Download Size | RAM usage | AWS c6g.4xlarge (arm64, 8 Core, 16 vCPU) | AWS c6gd.16xlarge (arm64, 32 Core, 64 vCPU) | My Gaming Computer: AMD Ryzen 7 3700X  (x64, 8 Core, 16 vCPU) | Oracle A1  (4 Cores) |
 |------------|---------------|-----------|------------------------------------------|---------------------------------------------|---------------------------------------------------------------|----------------------|
