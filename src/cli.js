@@ -35,7 +35,7 @@ const DOWNLOAD_CHUNK_SIZE = 1024;
 async function promptModelSelection() {
 	console.log(`--------------------------------------`)
 	console.log('RWKV Raven models will be downloaded into ~/.rwkv/');
-	console.log('Listed file sizes + 1 : is the approximate amount of RAM your system will need');
+	console.log('Listed file sizes + 2 : is the approximate amount of RAM your system will need');
 	console.log(`--------------------------------------`)
 	const choices = RWKV_MODELS.map((model) => ({
 		name: `${(model.size/1024/1024/1024).toFixed(2)} GB - ${model.label}`,
@@ -103,7 +103,17 @@ async function downloadModelRaw(model) {
 				speed: speed,
 				downloadedSize_gb: downloadedSize_gb,
 			});
-			outputStream.write(value);
+				
+			// Await for outputStream.write to complete
+			await new Promise((resolve, reject) => {
+				outputStream.write(value, (err) => {
+					if (err) {
+						reject(err);
+						return;
+					}
+					resolve();
+				});
+			});
 		}
 	}
 	await processData();
