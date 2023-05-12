@@ -284,3 +284,25 @@ While the example is an extreame case, there are smaller scale off-by-1 example 
 @BlinkDL - for the main rwkv project
 
 - https://github.com/BlinkDL/RWKV-LM
+
+# Time taken for token completion
+
+| Model Size | Download Size | RAM usage | AWS c6g.4xlarge (arm64, 8 Core, 16 vCPU) | AWS c6gd.16xlarge (arm64, 32 Core, 64 vCPU) | My Gaming Computer: AMD Ryzen 7 3700X  (x64, 8 Core, 16 vCPU) | Oracle A1  (4 Cores) |
+|------------|---------------|-----------|------------------------------------------|---------------------------------------------|---------------------------------------------------------------|----------------------|
+| 1.5B       | 2.82 GB       | ~ 3.0 GB  | 94.699 ms                                | 81.497 ms                                   | 283.681 ms                                                    | 177.025 ms           |
+| 3B         | 5.56 GB       | ~ 5.7 GB  | 139.038 ms                               | 109.676 ms                                  | 564.116 ms                                                    |                      |
+| 7B (Q8_0)  | 8.09 GB       | ~ 8.3 GB  | 167.148 ms                               | 126.856 ms                                  |                                                               |                      |
+| 7B         | 13.77 GB      | ~ 14.9 GB | 259.888 ms                               | 175.069 ms                                  |                                                               |                      |
+| 14B (Q8_0) | 15.25 GB      | ~ 16.4 GB | 269.201 ms                               | 199.114 ms                                  |                                                               |                      |
+| 14B        | 26.36 GB      | ~ 27.9 GB | 460.963 ms                               | 273.277 ms                                  |                                                               |                      |
+
+** Note: There are know performance bottleneck issue in the tokenizer, and sampler written in nodejs, as its a single threaded operation, between each "token" in nodejs. And would penalize smaller model more then larger models.
+
+The above is done by downloading the respective model, and performing the `rwkv-cpp-node --dragon` benchmark. Which would give the following JSON at the end
+
+```
+... output of the benchmark ...
+{"promptTime":178,"completionTime":109676,"totalTime":109854,"timePerPrompt":89,"timePerCompletion":109.676,"timePerFullPrompt":4.341463414634147,"promptPerSecond":11.235955056179776,"completionPerSecond":9.117765053430103,"fullPromptPerSecond":230.33707865168537}
+```
+
+timePerCompletion : is then extracted and used in the above table.
