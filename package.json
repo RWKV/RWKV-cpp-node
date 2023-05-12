@@ -1,6 +1,6 @@
 {
 	"name": "rwkv-cpp-node",
-	"version": "1.1.23",
+	"version": "1.1.24",
 	"description": "RWKV.cpp bindings for node.js - includes CLI tooling to quickly download and run your RWKV raven models",
 	"main": "src/RWKV.js",
 	"scripts": {
