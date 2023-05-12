@@ -298,7 +298,7 @@ While the example is an extreame case, there are smaller scale off-by-1 example 
 
 ** Note: There are know performance bottleneck issue in the tokenizer, and sampler written in nodejs, as its a single threaded operation, between each "token" in nodejs. And would penalize smaller model more then larger models.
 
-The above is done by downloading the respective model, and performing the `rwkv-cpp-node --dragon` benchmark. Which would give the following JSON at the end
+The above is done by downloading the respective model via `rwkv-cpp-node --setup`, and performing the `rwkv-cpp-node --dragon` benchmark. Which would give the following JSON at the end
 
 ```
 ... output of the benchmark ...
