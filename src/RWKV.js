@@ -55,10 +55,14 @@ class RWKV {
 	 * 
 	 * @param {Object|string} config object, or the model path string
 	 */
-	constructor(config) {
+	constructor(config, threadCount, layers) {
+
+		if (threadCount == null) {
+			threadCount = 0;
+		}
 		// Check if the config is a string, if so normalize it to a config obj
 		if (typeof config === "string") {
-			config = { path: config };
+			config = { path: config, threads: parseInt(threadCount, 10), layers: layers };
 		}
 
 		// Store the used config
@@ -72,13 +76,15 @@ class RWKV {
 
 		// Load the cpp context
 		let ctx = cpp_bind.rwkv_init_from_file(config.path, threads);
-
+		
 		// Get the state and logits size
 		this._state_size = cpp_bind.rwkv_get_state_buffer_element_count(ctx);
 		this._logits_size = cpp_bind.rwkv_get_logits_buffer_element_count(ctx);
-
+		
 		// Store the context
 		this._ctx = ctx;
+		
+		cpp_bind.rwkv_gpu_offload_layers(ctx,config.layers);
 
 		// Prepare the LRU cache with the configured cache size
 		//
@@ -522,21 +528,22 @@ class RWKV {
 
 		// !!! main token gen loop
 		// ---
-
+		
 		// Lets loop until we hit the max token count
 		// or one of the several stop sequence
-		for(let i=1; i<maxTokens; i++) {
+		//	for(let i=1; i<maxTokens; i++) {
 			// Get the current state
 			let curState = stateBuffer[curBufferIndex].state;
 			// let curLogits = stateBuffer[curBufferIndex].logits;
-
+			
 			// Get the target next state
 			let nxtState = stateBuffer[nxtBufferIndex].state;
 			let nxtLogits = stateBuffer[nxtBufferIndex].logits;
-
+			
 			// Compute the next state
-			let evalRes = cpp_bind.rwkv_eval(this._ctx, curTokenObj.token, curState, nxtState, nxtLogits);
-
+			//		let evalRes = cpp_bind.rwkv_eval(this._ctx, curTokenObj.token, curState, nxtState, nxtLogits);
+			let evalRes = cpp_bind.rwkv_eval_sequence(this._ctx, curTokenObj, outputStr.length, curState, nxtState, nxtLogits);
+			//
 			// Abort if eval failed
 			if( evalRes == false ) {
 				throw new Error("Unexpected eval error during inference process");
@@ -562,7 +569,7 @@ class RWKV {
 			}
 
 			// Check if we hit a stop sequence
-			if( stopArr && stopArr.length > 0 ) {
+			/*if( stopArr && stopArr.length > 0 ) {
 				// Get the last X string, for stop sequence matching
 				let lastXStr = outputStr.slice(-(stopSeqMaxLen*2));
 
@@ -577,7 +584,7 @@ class RWKV {
 				if(stopSeqMatched) {
 					break;
 				}
-			}
+			}*/
 
 			// Handle output streaming
 			if( outputStream ) {
@@ -586,10 +593,9 @@ class RWKV {
 					outputStream(outputStr.slice(streamPos, streamLimit));
 					streamPos = streamLimit;
 				}
-			}
-		}
+			}		
 
-
+	//	}
 		// !!! finished the gen loop
 		// ---
 
