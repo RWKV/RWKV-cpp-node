@@ -99,7 +99,7 @@ const rwkv_eval = rwkvKoffiBind.func('bool rwkv_eval(CTX_HANDLE ctx, int32_t tok
 const rwkv_get_state_buffer_element_count = rwkvKoffiBind.func('uint32_t rwkv_get_state_buffer_element_count(CTX_HANDLE)');
 const rwkv_get_logits_buffer_element_count = rwkvKoffiBind.func('uint32_t rwkv_get_logits_buffer_element_count(CTX_HANDLE)');
 const rwkv_gpu_offload_layers = rwkvKoffiBind.func('bool rwkv_gpu_offload_layers(CTX_HANDLE ctx, uint32_t gpu_id)');
-const rwkv_eval_sequence = rwkvKoffiBind.func('bool rwkv_eval_sequence(CTX_HANDLE ctx, const uint32_t * tokens, size_t sequence_len, const float * state_in, float * state_out, float * logits_out)');
+const rwkv_eval_sequence = rwkvKoffiBind.func('bool rwkv_eval_sequence(CTX_HANDLE ctx, const uint32_t * tokens, size_t sequence_len, _Inout_ const float * state_in, _Inout_ float * state_out, _Inout_ float * logits_out)');
 const rwkv_quantize_model_file = rwkvKoffiBind.func('bool rwkv_quantize_model_file(const char * model_file_path_in, const char * model_file_path_out, const char * format_name)');
 const rwkv_get_system_info_string = rwkvKoffiBind.func('const char * rwkv_get_system_info_string()');
 
