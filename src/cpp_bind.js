@@ -156,11 +156,11 @@ module.exports = {
     * Has to build a computation graph on the first call for a given sequence, but will use this cached graph for subsequent calls of the same sequence length.
     * Not thread-safe. For parallel inference, call rwkv_clone_context to create one rwkv_context for each thread.
     * Returns false on any error.
-    * - tokens: pointer to an array of tokens. If NULL, the graph will be built and cached, but not executed: this can be useful for initialization.
-    * - sequence_len: number of tokens to read from the array.
-    * - state_in: FP32 buffer of size rwkv_get_state_len(), or NULL if this is a first pass.
-    * - state_out: FP32 buffer of size rwkv_get_state_len(). This buffer will be written to if non-NULL.
-    * - logits_out: FP32 buffer of size rwkv_get_logits_len(). This buffer will be written to if non-NULL.
+    * @param tokens: pointer to an array of tokens. If NULL, the graph will be built and cached, but not executed: this can be useful for initialization.
+    * @param sequence_len: number of tokens to read from the array.
+    * @param state_in: FP32 buffer of size rwkv_get_state_len(), or NULL if this is a first pass.
+    * @param state_out: FP32 buffer of size rwkv_get_state_len(). This buffer will be written to if non-NULL.
+    * @param logits_out: FP32 buffer of size rwkv_get_logits_len(). This buffer will be written to if non-NULL.
 	**/
     rwkv_eval_sequence : rwkv_eval_sequence,
 
