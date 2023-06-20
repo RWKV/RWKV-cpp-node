@@ -25,6 +25,9 @@ const RWKV_CLI_DIR = path.join(os.homedir(), '.rwkv');
 const CONFIG_FILE = path.join(RWKV_CLI_DIR, 'config.json');
 const DOWNLOAD_CHUNK_SIZE = 1024;
 
+let threadCount = 6;
+let layers = 0;
+
 // ---------------------------
 // Model downloading
 // ---------------------------
@@ -255,13 +258,15 @@ async function performSetup() {
 
 async function startChatBot(modelPath) {
 	
+
+
 	// Load the chatbot
 	console.log(`--------------------------------------`)
 	console.log(`Starting RWKV chat mode`)
 	console.log(`--------------------------------------`)
 	console.log(`Loading model from ${modelPath} ...`)
 
-	const raven = new RWKV(modelPath);
+	const raven = new RWKV(modelPath, threadCount, layers);
 
 	// User / bot label name
 	const user = "Bob";
@@ -271,7 +276,7 @@ async function startChatBot(modelPath) {
 	// The chat bot prompt to use
 	const prompt = [
 		"",
-		`The following is a verbose detailed conversation between ${user} and a young girl ${bot}. ${bot} is intelligent, friendly and cute. ${bot} is unlikely to disagree with ${user}.`,
+		`The following is a verbose detailed conversation between ${user} and a young women ${bot}. ${bot} is intelligent, friendly and cute. ${bot} is unlikely to disagree with ${user}.`,
 		"",
 		`${user}${interface} Hello ${bot}, how are you doing?`,
 		"",
@@ -282,9 +287,11 @@ async function startChatBot(modelPath) {
 		`${bot}${interface} Not at all! I'm listening.`,
 		"",
 		""
+
 	].join("\n");
 
 	// Preload the prompt
+	console.log(`Preloading the prompt: ${prompt}`);
 	raven.preloadPrompt(prompt);
 
 	// Log the start of the conversation
@@ -328,7 +335,7 @@ async function runDragonPrompt(modelPath) {
 	// Load the chatbot
 	console.log(`Loading model from ${modelPath} ...`)
 	console.log(`--------------------------------------`)
-	const raven = new RWKV(modelPath);
+	const raven = new RWKV(modelPath, threadCount, layers);
 
 	// The demo prompt for RWKV
 	const dragonPrompt = '\nIn a shocking finding, scientist discovered a herd of dragons living in a remote, previously unexplored valley, in Tibet. Even more surprising to the researchers was the fact that the dragons spoke perfect Chinese.'
@@ -354,6 +361,14 @@ async function runDragonPrompt(modelPath) {
 // CLI handling
 // ---------------------------
 
+class rwkv_model {
+	constructor(modelpath, threadcount, layers) {
+	  this.modelpath = modelpath;
+	  this.threadcount = threadcount;
+	  this.layers = layers;
+	}
+  }
+
 // Run the CLI within an async function
 (async function() {
 	// Get the current CLI arguments
@@ -370,8 +385,43 @@ async function runDragonPrompt(modelPath) {
 	let modelPath = null;
 
 	// Check if first arg is --modelPath
-	if (args[0] === '--modelPath') {
+	if (args.indexOf('--modelPath') >=0) {
 		modelPath = args[1];
+	}
+
+	// check if args contains '--threadCount' and set threadcount to the next arg if not specified default to 6
+
+	if (args.indexOf('--threadcount') >= 0) {
+		let _threadCount = args[args.indexOf('--threadcount') + 1];
+		try {
+			threadCount = parseInt(_threadCount);
+			if (threadCount > 0) {
+				threadCount = _threadCount;
+			} else {			
+				throw new Error("Invalid threadCount value, should be positive, defaulting to 6");
+				threadCount = 6;
+			}
+		} catch (error) {
+			console.log("Invalid threadCount value, defaulting to 6");
+			threadCount = 6;
+		}
+	}
+	
+	// Check if '--layers' is specified and set vram to the next arg if not specified default to 0
+	if (args.indexOf('--layers') >= 0) {
+		layers = 0;
+
+		_layers = args[args.indexOf('--layers') + 1];
+		try {
+			layers = parseInt(_layers);
+		
+			if (isNaN(layers) || !isFinite(layers)) {		
+				throw new Error("Invalid layers value, " + layers +  " defaulting to 0");
+			}		
+		} catch (error) {
+			console.log("Invalid layers value, " + _layers + " defaulting to 0");	
+			layers = 0;
+		}
 	}
 
 	// If model path is not set, check if it is in the config
@@ -402,6 +452,8 @@ async function runDragonPrompt(modelPath) {
 		await runDragonPrompt(modelPath);
 		return;
 	}
+	modelArgs = new rwkv_model(modelPath, parseInt(threadCount), layers);
+//todo: find why i need to parse int here again.
 
 	// Call the main start chat bot instead
 	await startChatBot(modelPath);
