@@ -49,11 +49,14 @@ class RWKV {
 	 *
 	 * - path:           the model path
 	 * 
-	 * - threads:        the number of threads to use
+	 * - threads:        the number of threads to use 
 	 *                   (defaults to half the number of vCPUs)
 	 * 
 	 * - gpuOffload:     either the number of layers to offload, or a string ending with %
 	 *                   used to indicate the % of layers of offload from the model
+	 * 
+	 * - concurrent:		 the number of concurrent inferences to allow at a time
+	 * 							     (defaults to 1)
 	 * 
 	 * - gpuBatchSize:   the batch size to use for GPU offloading
 	 * 							     (defaults to 64)
@@ -75,7 +78,13 @@ class RWKV {
 		// Get the CPU thread count
 		let threads = config.threads;
 		if (config.threads == null || threads <= 0) {
-			config.threads = os.cpus().length / 2;
+			if( config.gpuOffload != null && parseInt(config.gpuOffload) > 0) {
+				// With gpu offloading, the optimal seems to be a light mix of cpu
+				config.threads = 4;
+			} else {
+				// Use half the number of vCPUs
+				config.threads = os.cpus().length / 2;
+			}
 		}
 
 		// Store the used config
@@ -98,12 +107,12 @@ class RWKV {
 		this._fileSize = fileSize;
 		
 		// Load the cpp context, and store it
-		let ctx = await cpp_bind.rwkv_init_from_file.async(config.path, config.threads);
-		this._ctx = ctx;
+		let mainCtx = await cpp_bind.rwkv_init_from_file.async(config.path, config.threads);
+		this._mainCtx = mainCtx;
 
 		// Get the state and logits size
-		this._state_size = await cpp_bind.rwkv_get_state_len.async(ctx);
-		this._logits_size = await cpp_bind.rwkv_get_logits_len.async(ctx);
+		this._state_size = await cpp_bind.rwkv_get_state_len.async(mainCtx);
+		this._logits_size = await cpp_bind.rwkv_get_logits_len.async(mainCtx);
 
 		// Offload layers
 		let gpu_layers = config.gpuOffload || 0;
@@ -112,7 +121,7 @@ class RWKV {
 			let gpu_layers_percent = parseInt(gpu_layers);
 
 			// Get the number of layers
-			let num_layers = await cpp_bind.rwkv_get_n_layer.async(ctx);
+			let num_layers = await cpp_bind.rwkv_get_n_layer.async(mainCtx);
 
 			// Compute the number of layers to offload
 			gpu_layers = Math.floor(num_layers * gpu_layers_percent / 100);
@@ -120,8 +129,31 @@ class RWKV {
 
 		// GPU offloading if needed
 		if (gpu_layers > 0) {
-			await cpp_bind.rwkv_gpu_offload_layers.async(ctx, gpu_layers);
+			await cpp_bind.rwkv_gpu_offload_layers.async(mainCtx, gpu_layers);
 		}
+
+		// Get the number of concurrent inferences
+		let concurrent = config.concurrent || 1;
+
+		// Prepare the work ctx array, used for seperate concurrent inferences
+		let workCtxArray = [mainCtx];
+		for(let i=1; i<concurrent; i++) {
+			workCtxArray.push(await cpp_bind.rwkv_clone_context.async(mainCtx, config.threads));
+		}
+		this._workCtxArray = workCtxArray;
+
+		// Setup the promise queues & the shared work queue
+		// how this work is that inference task first goes into the shared queue,
+		// and gets split into their respective worker queues.
+		//
+		// This is done to prevent any single worker queue from pilling up
+		// to many 'large tasks', and cause a misbalance in task distribution.
+		let workQueueArr = [];
+		for(let i=0; i<concurrent; i++) {
+			workQueueArr.push(new promise_queue(1));
+		}
+		this._workQueueArr = workQueueArr;
+		this._sharedWorkQueue = new promise_queue(concurrent*3);
 
 		// Prepare the LRU cache with the configured cache size
 		//
@@ -139,18 +171,23 @@ class RWKV {
 			});
 		}
 
-		// Setup the promise queue
-		this._promiseQueue = new promise_queue(1);
 	}
 
 	/**
-	 * Cleanup the RWKV context
+	 * Cleanup the RWKV context - do not perform concurrent call of this operation
 	 */
 	async free() {
-		// Destroy the context
-		if (this._ctx) {
-			let p = cpp_bind.rwkv_free.async(this._ctx);
-			this._ctx = null;
+		// Destroy the context array
+		if(this._workCtxArray) {
+			for(let i=this._workCtxArray.length - 1; i>=1; i--) {
+				await cpp_bind.rwkv_free.async(this._workCtxArray[i]);
+			}
+			this._workCtxArray = null;
+		}
+		// Destroy the main context
+		if (this._mainCtx) {
+			let p = cpp_bind.rwkv_free.async(this._mainCtx);
+			this._mainCtx = null;
 			await p;
 		}
 	}
@@ -163,7 +200,7 @@ class RWKV {
 	 * Internal function, throw if the context is not set
 	 */
 	_checkContext() {
-		if (!this._ctx) {
+		if (!this._mainCtx) {
 			throw new Error("RWKV context is not set, have you called setup()?");
 		}
 	}
@@ -207,7 +244,7 @@ class RWKV {
 			const chunk = tokenArr.slice(i, i + batchSize);
 			if (
 				cpp_bind.rwkv_eval_sequence(
-					this._ctx,
+					this._mainCtx,
 					chunk,
 					chunk.length,
 					outputState,
@@ -221,7 +258,7 @@ class RWKV {
 
 		// for( const token of tokenArr ) {
 		// 	if( cpp_bind.rwkv_eval(
-		// 		this._ctx,
+		// 		this._mainCtx,
 		// 		token,
 		// 		outputState,
 		// 		outputState,
@@ -420,7 +457,7 @@ class RWKV {
 	 * @param {Object} options the options to use for completion, if given a string, this will be used as the prompt
 	 */
 	completion(opt) {
-		// ctx safety
+		// mainCtx safety
 		this._checkContext();
 
 		// Normalize string opt
@@ -630,7 +667,7 @@ class RWKV {
 
 			// Compute the next state
 			let evalRes = cpp_bind.rwkv_eval(
-				this._ctx,
+				this._mainCtx,
 				curTokenObj.token,
 				curState,
 				nxtState,
