@@ -15,8 +15,6 @@ const koffi = require("koffi")
 // The lib path to use
 let rwkvCppLibPath = null;
 
-// console.log("ARCH", process.arch);
-
 // Check which platform we're on
 if( process.arch === 'arm64' ) {
 	if( process.platform === 'darwin' ) {
@@ -31,12 +29,13 @@ if( process.arch === 'arm64' ) {
 		// We only do CPU feature detection in windows
 		// due to the different libraries with varients in AVX support
 		//
-		// Note as this is an optional dependency, it can fail to load
+		// Note as this is an optional dependency, 
+		// it can fail to load/compile for random reasons
 		let cpuFeatures = null;
 		try {
 			cpuFeatures = require('cpu-features')();
 		} catch( err ) {
-			// Silently ignore, we assume avx
+			// Silently ignore, we assume only avx is supported
 		}
 	
 		// Load the highest AVX supported CPU when possible
@@ -94,7 +93,6 @@ const rwkvCppFullLibPath = path.resolve( __dirname, "..", rwkvCppLibPath);
 const rwkvKoffiBind = koffi.load(rwkvCppFullLibPath);
 const ctx_pointer = koffi.pointer('CTX_HANDLE', koffi.opaque());
 const rwkv_init_from_file = rwkvKoffiBind.func('CTX_HANDLE rwkv_init_from_file(const char * model_file_path, uint32_t n_threads)');
-const rwkv_free = rwkvKoffiBind.func('void rwkv_free(CTX_HANDLE ctx)');
 const rwkv_eval = rwkvKoffiBind.func('bool rwkv_eval(CTX_HANDLE ctx, int32_t token, _Inout_ float * state_in, _Inout_ float * state_out, _Inout_ float * logits_out)');
 const rwkv_get_state_buffer_element_count = rwkvKoffiBind.func('uint32_t rwkv_get_state_buffer_element_count(CTX_HANDLE)');
 const rwkv_get_logits_buffer_element_count = rwkvKoffiBind.func('uint32_t rwkv_get_logits_buffer_element_count(CTX_HANDLE)');
@@ -102,6 +100,7 @@ const rwkv_gpu_offload_layers = rwkvKoffiBind.func('bool rwkv_gpu_offload_layers
 const rwkv_eval_sequence = rwkvKoffiBind.func('bool rwkv_eval_sequence(CTX_HANDLE ctx, const uint32_t * tokens, size_t sequence_len, const float * state_in, float * state_out, float * logits_out)');
 const rwkv_quantize_model_file = rwkvKoffiBind.func('bool rwkv_quantize_model_file(const char * model_file_path_in, const char * model_file_path_out, const char * format_name)');
 const rwkv_get_system_info_string = rwkvKoffiBind.func('const char * rwkv_get_system_info_string()');
+const rwkv_free = rwkvKoffiBind.func('void rwkv_free(CTX_HANDLE ctx)');
 
 //---------------------------
 // Module export
