@@ -117,7 +117,7 @@ module.exports = {
 	 * Loads the model from a file and prepares it for inference.
 	 * Returns NULL on any error. Error messages would be printed to stderr.
 	 * 
-	 * ( For async varient, just call the function.async varient )
+	 * (For async op, just call the <function-name>.async varient)
 	 * 
 	 * @param {String} model_file_path - path to model file in ggml format.
 	 * @param {Number} n_threads - number of CPU threads to use for inference.
@@ -128,11 +128,11 @@ module.exports = {
 
 	/**
 	 * Creates a new context from an existing one.
-     * This can allow you to run multiple rwkv_eval's in parallel, without having to load a single model multiple times.
-     * Each rwkv_context can have one eval running at a time.
-     * Every rwkv_context must be freed using rwkv_free.
+	 * This can allow you to run multiple rwkv_eval's in parallel, without having to load a single model multiple times.
+	 * Each rwkv_context can have one eval running at a time.
+	 * Every rwkv_context must be freed using rwkv_free.
 	 * 
-	 * ( For async varient, just call the function.async varient )
+	 * (For async op, just call the <function-name>.async varient)
 	 * 
 	 * @param {ffi_pointer} ctx - Pointer to the RWKV context.
 	 * @param {Number} n_threads - number of CPU threads to use for inference.
@@ -145,7 +145,7 @@ module.exports = {
 	 * Offloads the specified layers to the GPU.
 	 * Returns false on any error. Error messages would be printed to stderr.
 	 * 
-	 * ( For async varient, just call the function.async varient )
+	 * (For async op, just call the <function-name>.async varient)
 	 * 
 	 * @param {ffi_pointer} ctx - Pointer to the RWKV context.
 	 * @param {Number} n_gpu_layers - number of GPU layers to offload
@@ -158,7 +158,7 @@ module.exports = {
 	/**
 	 * Returns count of FP32 elements in state buffer.
 	 * 
-	 * ( For async varient, just call the function.async varient )
+	 * (For async op, just call the <function-name>.async varient)
 	 * 
 	 * @param {ffi_pointer} ctx - Pointer to the RWKV context.
 	 * 
@@ -169,7 +169,7 @@ module.exports = {
 	/**
 	 * Returns count of FP32 elements in logits buffer.
 	 * 
-	 * ( For async varient, just call the function.async varient )
+	 * (For async op, just call the <function-name>.async varient)
 	 * 
 	 * @param {ffi_pointer} ctx - Pointer to the RWKV context.
 	 * 
@@ -180,7 +180,7 @@ module.exports = {
 	/**
 	 * Returns count of FP32 number of layers
 	 * 
-	 * ( For async varient, just call the function.async varient )
+	 * (For async op, just call the <function-name>.async varient)
 	 * 
 	 * @param {ffi_pointer} ctx - Pointer to the RWKV context.
 	 * 
@@ -191,7 +191,7 @@ module.exports = {
 	/**
 	 * Returns count of FP32 number of embed params
 	 * 
-	 * ( For async varient, just call the function.async varient )
+	 * (For async op, just call the <function-name>.async varient)
 	 * 
 	 * @param {ffi_pointer} ctx - Pointer to the RWKV context.
 	 * 
@@ -202,7 +202,7 @@ module.exports = {
 	/**
 	 * Returns count of FP32 number of vocab params
 	 * 
-	 * ( For async varient, just call the function.async varient )
+	 * (For async op, just call the <function-name>.async varient)
 	 * 
 	 * @param {ffi_pointer} ctx - Pointer to the RWKV context.
 	 * 
@@ -217,7 +217,7 @@ module.exports = {
 	 * Evaluates the model for a single token.
 	 * Returns false on any error. Error messages would be printed to stderr.
 	 * 
-	 * ( For async varient, just call the function.async varient )
+	 * (For async op, just call the <function-name>.async varient)
 	 * 
 	 * @param {ffi_pointer} ctx - Pointer to the RWKV context.
 	 * @param {Number} token - The token to evaluate.
@@ -236,7 +236,7 @@ module.exports = {
 	 * Not thread-safe. For parallel inference, call rwkv_clone_context to create one rwkv_context for each thread.
 	 * Returns false on any error.
 	 * 
-	 * ( For async varient, just call the function.async varient )
+	 * (For async op, just call the <function-name>.async varient)
 	 * 
 	 * @param tokens: pointer to an array of tokens. If NULL, the graph will be built and cached, but not executed: this can be useful for initialization.
 	 * @param sequence_len: number of tokens to read from the array.
@@ -246,7 +246,7 @@ module.exports = {
 	 * 
 	 * @returns {Boolean} True if successful, false if not.
 	 **/
-    rwkv_eval_sequence : rwkv_eval_sequence,
+	rwkv_eval_sequence : rwkv_eval_sequence,
 
 	// Quantizing models
 	// ---
@@ -263,7 +263,7 @@ module.exports = {
 	 * - Q5_1
 	 * - Q8_0
 	 *
-	 * ( For async varient, just call the function.async varient )
+	 * (For async op, just call the <function-name>.async varient)
 	 * 
 	 * @param {String} model_file_path_in - Path to the input model file in ggml format.
 	 * @param {String} model_file_path_out - Path to the output model file in ggml format.
@@ -279,7 +279,7 @@ module.exports = {
 	/**
 	 * Frees all allocated memory and the context.
 	 *
-	 * ( For async varient, just call the function.async varient )
+	 * (For async op, just call the <function-name>.async varient)
 	 * 
 	 * @param {ffi_pointer} ctx - Pointer to the RWKV context.
 	 **/
