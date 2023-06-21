@@ -8,6 +8,7 @@ const tokenizer = require("rwkv-tokenizer-node");
 const cpp_bind = require("./cpp_bind");
 const ai_utils = require("./ai_utils");
 const LRUCache = require("lru-cache");
+const promise_queue = require("promise-queue");
 
 //
 // Token cache offset which we use
@@ -46,11 +47,17 @@ class RWKV {
 	 *
 	 * If initialized with an object, you can use the following parameters
 	 *
-	 * - path: the model path
-	 * - threads: the number of threads to use
-	 *            (defaults to half the number of vCPUs)
-	 * - gpuOffload: either the number of layers to offload, or a string ending with %
-	 *               used to indicate the % of layers of offload from the model
+	 * - path:           the model path
+	 * 
+	 * - threads:        the number of threads to use
+	 *                   (defaults to half the number of vCPUs)
+	 * 
+	 * - gpuOffload:     either the number of layers to offload, or a string ending with %
+	 *                   used to indicate the % of layers of offload from the model
+	 * 
+	 * - gpuBatchSize:   the batch size to use for GPU offloading
+	 * 							     (defaults to 64)
+	 * 
 	 * - stateCacheSize: the hidden state cache size to use,
 	 *                   useful to speed up inference of a chat like model
 	 *                   (defaults to 50)
@@ -131,18 +138,26 @@ class RWKV {
 				max: config.stateCacheSize || 50,
 			});
 		}
+
+		// Setup the promise queue
+		this._promiseQueue = new promise_queue(1);
 	}
 
 	/**
 	 * Cleanup the RWKV context
 	 */
-	free() {
+	async free() {
 		// Destroy the context
 		if (this._ctx) {
-			cpp_bind.rwkv_free(this._ctx);
+			let p = cpp_bind.rwkv_free.async(this._ctx);
 			this._ctx = null;
+			await p;
 		}
 	}
+
+	//-------------
+	// Internal ops
+	//-------------
 
 	/**
 	 * Internal function, throw if the context is not set
@@ -153,22 +168,18 @@ class RWKV {
 		}
 	}
 
-	//-------------
-	// Internal ops
-	//-------------
-
 	/**
 	 * @private mehthod (do not use API directly, it will not be maintained)
 	 *
 	 * Given the existing state, and the input string, get the completed hidden state buffer.
 	 * This operation DOES NOT use the internal cache.
 	 *
-	 * @param {Float32Array} state - existing state to compute from
+	 * @param {Float32Array} inState - existing state to compute from
 	 * @param {Array<number>} tokenArr - array of tokens to compute
 	 *
 	 * @returns {Object} the hidden state buffer and logits buffer
 	 */
-	_getHiddenState_fromExistingState_andTokenArr(state, tokenArr) {
+	_getHiddenState_fromExistingState_andTokenArr(inState, tokenArr) {
 		// If state is null, we start from scratch
 		if (state == null) {
 			state = new Float32Array(this._state_size);
@@ -179,19 +190,21 @@ class RWKV {
 			throw new Error("RWKV token array is empty");
 		}
 
+		// Get the batch size
+		let batchSize = this._config.gpuBatchSize || 64;
+
 		// Prepare the output state to use
 		let outputState = new Float32Array(this._state_size);
 
 		// Copy the state into the output state
-		outputState.set(state);
+		outputState.set(inState);
 
 		// Prepare the logit buffer (to be ignored sadly)
 		let logits = new Float32Array(this._logits_size);
 
 		// Compute the hidden state for each token
-
-		for (let i = 0; i < tokenArr.length; i += 64) {
-			const chunk = tokenArr.slice(i, i + 64);
+		for (let i = 0; i < tokenArr.length; i += batchSize) {
+			const chunk = tokenArr.slice(i, i + batchSize);
 			if (
 				cpp_bind.rwkv_eval_sequence(
 					this._ctx,
@@ -206,7 +219,7 @@ class RWKV {
 			}
 		}
 
-			// for( const token of tokenArr ) {
+		// for( const token of tokenArr ) {
 		// 	if( cpp_bind.rwkv_eval(
 		// 		this._ctx,
 		// 		token,
