@@ -11,7 +11,8 @@ const crypto = require('crypto');
 const ProgressBar = require('progress');
 const RWKV = require("./RWKV");
 
-const inquirerPromise = import('inquirer');
+const inquirerPromise = await 
+.import('inquirer');
 
 // ---------------------------
 // Configs and paths
