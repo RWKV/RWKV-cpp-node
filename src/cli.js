@@ -269,12 +269,39 @@ async function startChatBot(modelPath) {
 	const raven = new RWKV(modelPath, threadCount, layers);
 
 	// User / bot label name
-	const user = "Bob";
-	const bot = "Alice";
+	const user = "User";
+	const bot = "Bot";
 	const interface = ":";
 
 	// The chat bot prompt to use
 	const prompt = [
+		
+			"",
+		`\nThe following is a verbose and detailed conversation between an AI assistant called Bot, and a human user called User.`,
+		"",
+		`Bot is intelligent, knowledgeable, wise and polite.`,
+		"",
+		`\n\nUser: french revolution what year\n\n`,
+		"",
+		`Bot: The French Revolution started in 1789, and lasted 10 years until 1799.\n\n`,
+		"",
+		`User: 3+5=?\n\n`,
+		"",
+		`Bot: The answer is 8.\n\n`,
+		"",
+		`User: guess i marry who ?\n\n`,
+		"",
+		`Bot: Only if you tell me more about yourself - what are your interests?\n\n`,
+		"",
+		`User: solve for a: 9-a=2\n\n`,
+		"",
+		`Bot: The answer is a = 7, because 9 - 7 = 2.\n\n`,
+		"",
+		`User: wat is lhc\n\n`,
+		"",
+		`Bot: LHC is a high-energy particle collider, built by CERN, and completed in 2008. They used it to confirm the existence of the Higgs boson in 2012.\n\n"`
+		
+	/*
 		"",
 		`The following is a verbose detailed conversation between ${user} and a young women ${bot}. ${bot} is intelligent, friendly and cute. ${bot} is unlikely to disagree with ${user}.`,
 		"",
@@ -287,7 +314,7 @@ async function startChatBot(modelPath) {
 		`${bot}${interface} Not at all! I'm listening.`,
 		"",
 		""
-
+	*/
 	].join("\n");
 
 	// Preload the prompt
@@ -324,7 +351,7 @@ async function startChatBot(modelPath) {
 			streamCallback: (text) => {
 				process.stdout.write(text);
 			},
-			stop: ["\nBob:", "\nbob:"]
+			stop: ["\nuser:", "\nUser:"]
 		});
 		// console.log(res);
 		chatHistory += `${res.completion.trim()}\n\n`;
