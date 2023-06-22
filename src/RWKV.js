@@ -7,6 +7,7 @@ const tokenizer = require("rwkv-tokenizer-node");
 const cpp_bind = require("./cpp_bind");
 const ai_utils = require("./ai_utils");
 const LRUCache = require("lru-cache");
+const EventEmitter = require('events');
 
 //
 // Token cache offset which we use
@@ -33,11 +34,8 @@ const MIN_OUTPUT_TOKEN_SIZE_FOR_BUFFERING = 5;
  *
  * It should not be used for training or model conversion
  */
-class RWKV {
-  //-------------
-  // Class Setup
-  //-------------
 
+class RWKV extends EventEmitter {
   /**
    * Constructor, with the RWKV CPP model path
    *
@@ -49,12 +47,14 @@ class RWKV {
    * - threads: the number of threads to use
    *            (defaults to the number of vCPUs)
    * - stateCacheSize: the hidden state cache size to use,
-   *                   useful to speed up inference of a chat like model
+   *                   useful to speed up inference of a chat-like model
    *                   (defaults to 50)
    *
    * @param {Object|string} config object, or the model path string
    */
   constructor(config, threadCount, layers) {
+    super(); // Call the super constructor of EventEmitter
+
     if (threadCount == null) {
       threadCount = 0;
     }
@@ -76,22 +76,34 @@ class RWKV {
       threads = os.cpus().length;
     }
 
-    // Load the cpp context
-    let ctx = cpp_bind.rwkv_init_from_file(config.path, threads);
+    // Load the cpp context asynchronously and return a promise
+    this._ctxPromise = this._loadModel(config, threads)
+      .then((ctx) => {
+        // Set the context and offload layers
+        this._ctx = ctx;
+        cpp_bind.rwkv_gpu_offload_layers(ctx, config.layers);
+
+        // Emit the "initialized" event
+        this.emit("initialized");
+
+        return ctx; // Resolve the promise with the context
+      })
+      .catch((error) => {
+        console.error("Error loading RWKV model:", error);
+        throw error;
+      });
 
     // Get the state and logits size
-    this._state_size = cpp_bind.rwkv_get_state_buffer_element_count(ctx);
-    this._logits_size = cpp_bind.rwkv_get_logits_buffer_element_count(ctx);
+    this._state_size = null; // Initialize as null until loaded
+    this._logits_size = null; // Initialize as null until loaded
 
-    // Store the context
-    this._ctx = ctx;
-
-    cpp_bind.rwkv_gpu_offload_layers(ctx, config.layers);
+    // Store the context (initialized as null until loaded)
+    this._ctx = null;
 
     // Prepare the LRU cache with the configured cache size
     //
     // it is worth noting that the 7B model takes up about 2.64 MB for the state buffer,
-    // meaning you will need atleast 264 MB of RAM for a cachesize of 100
+    // meaning you will need at least 264 MB of RAM for a cache size of 100
 
     // State cache, keeps the last N states in memory
     if (config.stateCacheSize === false || config.stateCacheSize <= 0) {
@@ -105,15 +117,53 @@ class RWKV {
     }
   }
 
+
+
   /**
-   * Cleanup the RWKV context
+   * Loads the RWKV model asynchronously
+   *
+   * @param {Object} config RWKV configuration object
+   * @param {number} threads Number of threads to use
+   * @returns {Promise} Promise that resolves with the RWKV context
+   */
+  async _loadModel(config, threads) {
+    return cpp_bind.rwkv_init_from_file(config.path, threads);
+  }
+
+  /**
+   * Preloads the prompt for the RWKV model
+   */
+  async preloadPrompt() {
+    await this._ctxPromise;
+  
+    const ctx = this._ctx;
+    this._checkContext();
+  
+    const message = "The following is a verbose detailed conversation between Bob and a young woman Alice. Alice is intelligent, friendly, and cute. Alice is unlikely to disagree with Bob.";
+    const response = this.completion(message);
+  
+    this._initialPrompt = (await response).choices[0].text;
+  
+    console.log("Prompt preloaded successfully.");
+  }
+  
+  /**
+   * Checks if the RWKV context is set
+   * Throws an error if the context is not set
+   */
+  _checkContext() {
+    if (!this._ctx) {
+      throw new Error("RWKV context is not set, did you call free()?");
+    }
+  }
+
+  /**
+   * Frees the RWKV context and releases resources
    */
   free() {
-    // Destroy the context
-    if (this._ctx) {
-      cpp_bind.rwkv_free(this._ctx);
-      this._ctx = null;
-    }
+    this._checkContext();
+    cpp_bind.rwkv_free(this._ctx);
+    this._ctx = null;
   }
 
   /**
@@ -178,17 +228,17 @@ class RWKV {
       }
     }
 
-    	// for( const token of tokenArr ) {
-		// 	if( cpp_bind.rwkv_eval(
-		// 		this._ctx,
-		// 		token,
-		// 		outputState,
-		// 		outputState,
-		// 		logits
-		// 	) == false ) {
-		// 		throw new Error("RWKV unexpected eval failed");
-		// 	}
-		// }
+    // for( const token of tokenArr ) {
+    // 	if( cpp_bind.rwkv_eval(
+    // 		this._ctx,
+    // 		token,
+    // 		outputState,
+    // 		outputState,
+    // 		logits
+    // 	) == false ) {
+    // 		throw new Error("RWKV unexpected eval failed");
+    // 	}
+    // }
 
     // Return the output state
     return {
@@ -688,7 +738,7 @@ class RWKV {
    *
    * @param {String} prompt
    */
-  preloadPrompt(prompt) {
+  async preloadPrompt(prompt) {
     this.completion({ prompt: prompt, max_tokens: 0 });
   }
 }

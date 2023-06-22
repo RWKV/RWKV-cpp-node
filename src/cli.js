@@ -11,8 +11,9 @@ const crypto = require('crypto');
 const ProgressBar = require('progress');
 const RWKV = require("./RWKV");
 
-const inquirerPromise = await 
-.import('inquirer');
+const inquirerPromise = import('inquirer');
+const fetch = require('isomorphic-fetch');
+
 
 // ---------------------------
 // Configs and paths
@@ -36,103 +37,54 @@ let layers = 0;
 /**
 * Prompt the user to select a model to download
 **/
-async function promptModelSelection() {
-	console.log(`--------------------------------------`)
-	console.log('RWKV Raven models will be downloaded into ~/.rwkv/');
-	console.log('Listed file sizes + 2 : is the approximate amount of RAM your system will need');
-	console.log(`--------------------------------------`)
-	const choices = RWKV_MODELS.map((model) => ({
-		name: `${(model.size/1024/1024/1024).toFixed(2)} GB - ${model.label}`,
-		value: model,
-	}));
-	const { model } = await (await inquirerPromise).default.prompt({
-		type: 'list',
-		name: 'model',
-		message: 'Select a RWKV raven model to download: ',
-		choices,
-	});
-	return model;
-}
-
-/**
-* Given the model config object, download it. Does not check if there is an existing file
-* @param {Object} model 
-* @returns 
-*/
 async function downloadModelRaw(model) {
 	const destinationPath = path.join(RWKV_CLI_DIR, `${model.name}`);
 	console.log(`Downloading '${model.label}' - this will be saved to ${destinationPath}`);
-	
+  
 	const response = await fetch(model.url);
 	if (!response.ok) {
-		throw new Error(`Failed to download ${model.label} model: ${response.statusText}`);
+	  throw new Error(`Failed to download ${model.label} model: ${response.statusText}`);
 	}
 	const fileSize = Number(response.headers.get('content-length'));
-
+  
 	// Incremental downloaded size and speed
 	let downloadedSize = 0;
 	let downloadedSize_gb = 0;
 	let speed = 0;
-
+  
 	const progressBar = new ProgressBar('[:bar] :percent :etas - :downloadedSize_gb GB - :speed MB/s', {
-		complete: '=',
-		incomplete: '-',
-		width: 20,
-		total: fileSize,
+	  complete: '=',
+	  incomplete: '-',
+	  width: 20,
+	  total: fileSize,
 	});
 	const outputStream = fs.createWriteStream(destinationPath);
-	const reader = response.body.getReader();
-
-	async function processData() {
-		const startTime = Date.now();
-		while (true) {
-			const { done, value } = await reader.read();
-
-			// Check for completion, if so terminate the loop
-			if (done) {
-				progressBar.terminate();
-				console.log(`Model ${model.name} downloaded to ${destinationPath}`);
-				outputStream.end();
-				reader.releaseLock();
-				break;
-			}
-
-			// Calculate size and speed
-			downloadedSize += value.length;
-			downloadedSize_gb = (downloadedSize / 1024 / 1024 / 1024).toFixed(2);
-			const timeTaken = (Date.now() - startTime) / 1000;
-			speed = (downloadedSize / 1024 / 1024 / timeTaken).toFixed(2);
-
-			progressBar.tick(value.length, {
-				speed: speed,
-				downloadedSize_gb: downloadedSize_gb,
-			});
-				
-			// Await for outputStream.write to complete
-			await new Promise((resolve, reject) => {
-				outputStream.write(value, (err) => {
-					if (err) {
-						reject(err);
-						return;
-					}
-					resolve();
-				});
-			});
-		}
-	}
-	await processData();
-
-	// Validate the model
-	console.log(`Validating downloaded model ...`)
-	if( (await validateModel(model)) == false ) {
-		console.log(`Model validation failed, run the --setup command again (mismatched size/sha256)`)
-		process.exit(1);
-	} else {
-		console.log(`Model validation passed!`)
-	}
-	return destinationPath;
-}
-
+  
+	return new Promise((resolve, reject) => {
+	  response.body
+		.pipe(outputStream)
+		.on('error', reject)
+		.on('data', (chunk) => {
+		  // Calculate size and speed
+		  downloadedSize += chunk.length;
+		  downloadedSize_gb = (downloadedSize / 1024 / 1024 / 1024).toFixed(2);
+		  const timeTaken = (Date.now() - startTime) / 1000;
+		  speed = (downloadedSize / 1024 / 1024 / timeTaken).toFixed(2);
+  
+		  progressBar.tick(chunk.length, {
+			speed: speed,
+			downloadedSize_gb: downloadedSize_gb,
+		  });
+		})
+		.on('end', () => {
+		  progressBar.terminate();
+		  console.log(`Model ${model.name} downloaded to ${destinationPath}`);
+		  outputStream.end();
+		  resolve(destinationPath);
+		});
+	});
+  }
+  
 /**
 * Given a file path, compute the sha256 hash of the file
 * @param {String} filePath 
@@ -258,79 +210,88 @@ async function performSetup() {
 // ---------------------------
 
 async function startChatBot(modelPath) {
-	
 
+    // Load the chatbot
+    console.log(`--------------------------------------`)
+    console.log(`Starting RWKV chat mode`)
+    console.log(`--------------------------------------`)
+    console.log(`Loading model from ${modelPath} ...`)
 
-	// Load the chatbot
-	console.log(`--------------------------------------`)
-	console.log(`Starting RWKV chat mode`)
-	console.log(`--------------------------------------`)
-	console.log(`Loading model from ${modelPath} ...`)
+    const raven = new RWKV(modelPath, threadCount, layers);
 
-	const raven = new RWKV(modelPath, threadCount, layers);
+    // User / bot label name
+    const user = "Bob";
+    const bot = "Alice";
+    const interface = ":";
 
-	// User / bot label name
-	const user = "Bob";
-	const bot = "Alice";
-	const interface = ":";
+    // The chat bot prompt to use
+    const prompt = [
+        "",
+        `The following is a verbose detailed conversation between ${user} and a young women ${bot}. ${bot} is intelligent, friendly and cute. ${bot} is unlikely to disagree with ${user}.`,
+        "",
+        `${user}${interface} Hello ${bot}, how are you doing?`,
+        "",
+        `${bot}${interface} Hi ${user}! Thanks, I'm fine. What about you?`,
+        "",
+        `${user}${interface} I am very good! It's nice to see you. Would you mind me chatting with you for a while?`,
+        "",
+        `${bot}${interface} Not at all! I'm listening.`,
+        "",
+        ""
 
-	// The chat bot prompt to use
-	const prompt = [
-		"",
-		`The following is a verbose detailed conversation between ${user} and a young women ${bot}. ${bot} is intelligent, friendly and cute. ${bot} is unlikely to disagree with ${user}.`,
-		"",
-		`${user}${interface} Hello ${bot}, how are you doing?`,
-		"",
-		`${bot}${interface} Hi ${user}! Thanks, I'm fine. What about you?`,
-		"",
-		`${user}${interface} I am very good! It's nice to see you. Would you mind me chatting with you for a while?`,
-		"",
-		`${bot}${interface} Not at all! I'm listening.`,
-		"",
-		""
+    ].join("\n");
 
-	].join("\n");
+    // Define a helper function to preload the prompt
+    function preloadPrompt() {
+        // Preload the prompt
+        raven.preloadPrompt(prompt);
 
-	// Preload the prompt
-	console.log(`Preloading the prompt: ${prompt}`);
-	raven.preloadPrompt(prompt);
+        // Log the start of the conversation
+        console.log(`The following is a conversation between ${user} the user and ${bot} the chatbot.`)
+        console.log(`--------------------------------------`)
+    }
 
-	// Log the start of the conversation
-	console.log(`The following is a conversation between ${user} the user and ${bot} the chatbot.`)
-	console.log(`--------------------------------------`)
+    // Wait for the instance to be fully initialized
+    await new Promise((resolve) => {
+        raven.on("initialized", resolve);
+    });
 
-	// The chat history
-	let chatHistory = prompt;
+    // Call the preloadPrompt function to load the prompt after initialization
+    preloadPrompt();
 
-	// Lets start the loop
-	while(true) {
-		// Get the user input
-		let res = await (await inquirerPromise).default.prompt([{
-			type: 'input',
-			name: 'userInput',
-			message: `${user}${interface} `,
-			validate: (value) => {
-				return (value||"").trim().length > 0;
-			}
-		}]);
+    // The chat history
+    let chatHistory = prompt;
 
-		// Add the user input to the chat history
-		chatHistory += `${user}${interface} ${res.userInput}\n\n${bot}:`;
+    // Lets start the loop
+    while(true) {
+        // Get the user input
+        let res = await (await inquirerPromise).default.prompt([{
+            type: 'input',
+            name: 'userInput',
+            message: `${user}${interface} `,
+            validate: (value) => {
+                return (value||"").trim().length > 0;
+            }
+        }]);
 
-		// Run the completion
-		process.stdout.write(`${bot}: `);
-		res = raven.completion({
-			prompt: chatHistory,
-			max_tokens: 200,
-			streamCallback: (text) => {
-				process.stdout.write(text);
-			},
-			stop: ["\nBob:", "\nbob:"]
-		});
-		// console.log(res);
-		chatHistory += `${res.completion.trim()}\n\n`;
-	}
+        // Add the user input to the chat history
+        chatHistory += `${user}${interface} ${res.userInput}\n\n${bot}:`;
+
+        // Run the completion
+        process.stdout.write(`${bot}: `);
+        res = raven.completion({
+            prompt: chatHistory,
+            max_tokens: 200,
+            streamCallback: (text) => {
+                process.stdout.write(text);
+            },
+            stop: ["\nBob:", "\nbob:"]
+        });
+        // console.log(res);
+        chatHistory += `${res.completion.trim()}\n\n`;
+    }
 }
+
 
 async function runDragonPrompt(modelPath) {
 	// Load the chatbot

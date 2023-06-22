@@ -126,15 +126,20 @@ module.exports = {
    */
   async rwkv_init_from_file(model_file_path, n_threads) {
     return new Promise((resolve, reject) => {
-      rwkv_init_from_file.async(model_file_path, n_threads, (err, result) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(result);
+      rwkv_init_from_file.async(
+        model_file_path,
+        n_threads,
+        (err, ctx) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(ctx);
+          }
         }
-      });
+      );
     });
   },
+  
 
   /**
    * Offloads the specified layers to the GPU.
