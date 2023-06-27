@@ -446,9 +446,12 @@ class RWKV {
 	 *
 	 * @param {Object} options the options to use for completion, if given a string, this will be used as the prompt
 	 */
-	completion(opt) {
+	async completion(opt) {
 		// mainCtx safety
 		this._checkContext();
+
+		// Self ref
+		let self = this;
 
 		// Normalize string opt
 		if (opt instanceof String || typeof opt == "string") {
@@ -462,292 +465,303 @@ class RWKV {
 			throw new Error("Prompt is required for completion operation");
 		}
 
-		// The prompt state obj to use (after processing the prompt)
-		let promptStartState = null;
+		// The request time
+		let requestTime = Date.now();
 
-		// Start the timer
-		let startTime = Date.now();
+		// ===
+		// Perform the main completion operation computation within
+		// a worker queue context, ensuring no overlapped executions of workers
+		// ===
+		return await this._assignFunctionToWorker(async(workerCtx) => {
 
-		// Get the starting state
-		if (opt.initState) {
-			let promptTokens = tokenizer.encode(opt.prompt);
-			promptStartState = this._getHiddenState_fromExistingState_andTokenArr(
-				opt.initState,
-				promptTokens
-			);
+			// ---
+			// We first get the initial state from the prompt input
+			// ---
 
-			// // Include the tracked input prompt, and tokens
-			// // to keep the object consistent with the other code path
-			// promptStartState.prompt = opt.prompt;
-			// promptStartState.tokens = promptTokens;
-		} else {
-			promptStartState = this._getHiddenState_fromFullInputString(opt.prompt);
-		}
+			// Start the timer
+			let startTime = Date.now();
 
-		// Propmpt completion timer
-		let promptCompletionTime = Date.now();
+			// The prompt state obj to use (after processing the prompt)
+			let promptStartState = null;
 
-		// Get the stop sequence longest string length
-		let stopArr = opt.stop || [];
-		if (stopArr instanceof String || typeof stopArr == "string") {
-			stopArr = [stopArr];
-		}
-
-		// Maximum length of the stop sequence
-		let stopSeqMaxLen = 0;
-		for (const stopStr of stopArr) {
-			stopSeqMaxLen = Math.max(stopSeqMaxLen, stopStr.length);
-		}
-
-		// The output string
-		let outputStr = "";
-		let outputTokens = [];
-
-		// The streamed position
-		let outputStream = opt.streamCallback;
-		let streamPos = 0;
-
-		// The stop sequence which as matched (if any)
-		let stopSeqMatched = null;
-
-		// Utility function, to format the output object
-		function formatOutputObject() {
-			// Get the output completion time
-			let completionTime = Date.now();
-
-			// The final output str
-			let finalOutputStr = outputStr;
-
-			// Prepare final output string, if stop sequence was matched, we remove it from the output
-			if (stopSeqMatched) {
-				let lastIndex = outputStr.lastIndexOf(stopSeqMatched);
-				finalOutputStr = outputStr.substring(0, lastIndex);
+			// Get the starting state
+			if (opt.initState) {
+				// This skips the cache, as we are using an existing state
+				let promptTokens = tokenizer.encode(opt.prompt);
+				promptStartState = self._getHiddenState_fromExistingState_andTokenArr(
+					opt.initState,
+					promptTokens,
+					workerCtx
+				);
+			} else {
+				promptStartState = self._getHiddenState_fromFullInputString(opt.prompt, workerCtx);
 			}
 
-			// Handle output streaming
-			if (outputStream) {
-				let streamLimit = finalOutputStr.length;
-				if (streamLimit > 0 && streamLimit > streamPos) {
-					outputStream(outputStr.slice(streamPos, streamLimit));
-					streamPos = streamLimit;
+			// Propmpt completion timer
+			let promptCompletionTime = Date.now();
+
+			// ---
+			// Initialize various local vars
+			// ---
+
+			// Get the stop sequence longest string length
+			let stopArr = opt.stop || [];
+			if (stopArr instanceof String || typeof stopArr == "string") {
+				stopArr = [stopArr];
+			}
+
+			// Maximum length of the stop sequence
+			let stopSeqMaxLen = 0;
+			for (const stopStr of stopArr) {
+				stopSeqMaxLen = Math.max(stopSeqMaxLen, stopStr.length);
+			}
+
+			// The output string
+			let outputStr = "";
+			let outputTokens = [];
+
+			// The streamed position
+			let outputStream = opt.streamCallback;
+			let streamPos = 0;
+
+			// The stop sequence which as matched (if any)
+			let stopSeqMatched = null;
+
+			// ---
+			// Handle immediate output, for max_tokens = 0
+			// which is used to cache the prompt for later use
+			// ---
+
+			// Utility function, to format the output object
+			function formatOutputObject() {
+				// Get the output completion time
+				let completionTime = Date.now();
+
+				// The final output str
+				let finalOutputStr = outputStr;
+
+				// Prepare final output string, if stop sequence was matched, we remove it from the output
+				if (stopSeqMatched) {
+					let lastIndex = outputStr.lastIndexOf(stopSeqMatched);
+					finalOutputStr = outputStr.substring(0, lastIndex);
 				}
+
+				// Handle output streaming
+				if (outputStream) {
+					let streamLimit = finalOutputStr.length;
+					if (streamLimit > 0 && streamLimit > streamPos) {
+						outputStream(outputStr.slice(streamPos, streamLimit));
+						streamPos = streamLimit;
+					}
+				}
+
+				// Get the final timings
+				let promptDuration = promptCompletionTime - startTime;
+				let completionDuration = completionTime - promptCompletionTime;
+				let totalDuration = completionTime - startTime;
+
+				// Lets return with the prebuilt state and logits
+				let ret = {
+					// The prompt used
+					prompt: promptStartState.prompt,
+
+					// The completion string
+					completion: finalOutputStr,
+
+					// Usage tracking
+					usage: {
+						promptTokens: promptStartState.tokens.length,
+						completionTokens: outputTokens.length,
+						totalTokens: promptStartState.tokens.length + outputTokens.length,
+						promptTokensCached: promptStartState.cachedTokenSize || 0,
+					},
+
+					// Performance timings
+					perf: {
+						// Idle queue waiting time (within queue)
+						queueIdleTime: startTime - requestTime,
+						
+						// Get timings in ms
+						promptTime: promptDuration,
+						completionTime: completionDuration,
+						totalTime: totalDuration,
+
+						// Time per token
+						timePerPrompt:
+							promptDuration /
+							(promptStartState.tokens.length - promptStartState.cachedTokenSize),
+						timePerCompletion: completionDuration / outputTokens.length,
+						timePerFullPrompt: promptDuration / promptStartState.tokens.length,
+					},
+				};
+
+				// Get the tokens per second
+				ret.perf.promptPerSecond = 1000.0 / ret.perf.timePerPrompt;
+				ret.perf.completionPerSecond = 1000.0 / ret.perf.timePerCompletion;
+				ret.perf.fullPromptPerSecond = 1000.0 / ret.perf.timePerFullPrompt;
+
+				// Return the object
+				return ret;
 			}
 
-			// Get the final timings
-			let promptDuration = promptCompletionTime - startTime;
-			let completionDuration = completionTime - promptCompletionTime;
-			let totalDuration = completionTime - startTime;
+			// Special handling of max_tokens = 0
+			// which is used for prompt caching
+			if (opt.max_tokens === 0) {
+				return formatOutputObject();
+			}
 
-			// Lets return with the prebuilt state and logits
-			let ret = {
-				// The prompt used
-				prompt: promptStartState.prompt,
+			// Lets start preparing a circular state buffer
+			const BUFFER_SIZE = 5;
+			let stateBuffer = [];
+			stateBuffer.length = BUFFER_SIZE;
+			stateBuffer[0] = promptStartState;
 
-				// The completion string
-				completion: finalOutputStr,
+			// ---
+			// Initialize circular state buffer
+			// ---
 
-				// // Last RWKV internal state
-				// // useful for dev / debugging
-				// //
-				// // Dropped because it is confusing (it contains the n-1 state typically)
-				// rwkv: {
-				// 	state: promptStartState.state,
-				// 	logits: promptStartState.logits,
-				// }
+			// Lets prepopulate the state buffer
+			for (let i = 1; i < BUFFER_SIZE; i++) {
+				stateBuffer[i] = {
+					state: new Float32Array(self._state_size),
+					logits: new Float32Array(self._logits_size),
+				};
+			}
 
-				// Usage tracking
-				usage: {
-					promptTokens: promptStartState.tokens.length,
-					completionTokens: outputTokens.length,
-					totalTokens: promptStartState.tokens.length + outputTokens.length,
-					promptTokensCached: promptStartState.cachedTokenSize || 0,
-				},
+			// Get the max token count
+			let maxTokens = opt.max_tokens || 64;
 
-				// Performance timings
-				perf: {
-					// Get timings in ms
-					promptTime: promptDuration,
-					completionTime: completionDuration,
-					totalTime: totalDuration,
+			// Temperature and top_p settings
+			let temperature = opt.temperature || 1.0;
+			let top_p = opt.top_p || 1.0;
 
-					// Time per token
-					timePerPrompt:
-						promptDuration /
-						(promptStartState.tokens.length - promptStartState.cachedTokenSize),
-					timePerCompletion: completionDuration / outputTokens.length,
-					timePerFullPrompt: promptDuration / promptStartState.tokens.length,
-				},
-			};
+			// ---
+			// !!! 1st token generation
+			// ---
 
-			// Get the tokens per second
-			ret.perf.promptPerSecond = 1000.0 / ret.perf.timePerPrompt;
-			ret.perf.completionPerSecond = 1000.0 / ret.perf.timePerCompletion;
-			ret.perf.fullPromptPerSecond = 1000.0 / ret.perf.timePerFullPrompt;
-			// console.log(ret);
-
-			// Return the object
-			return ret;
-		}
-
-		// Special handling of max_tokens = 0
-		// which is used for prompt caching
-		if (opt.max_tokens === 0) {
-			return formatOutputObject();
-		}
-
-		// Lets start preparing a circular state buffer
-		const BUFFER_SIZE = TOKEN_CACHE_OFFSET + 1;
-		let stateBuffer = [];
-		stateBuffer.length = BUFFER_SIZE;
-		stateBuffer[0] = promptStartState;
-
-		// Lets prepopulate the state buffer
-		for (let i = 1; i < BUFFER_SIZE; i++) {
-			stateBuffer[i] = {
-				state: new Float32Array(this._state_size),
-				logits: new Float32Array(this._logits_size),
-			};
-		}
-
-		// Get the max token count
-		let maxTokens = opt.max_tokens || 64;
-
-		// Temperature and top_p settings
-		let temperature = opt.temperature || 1.0;
-		let top_p = opt.top_p || 1.0;
-
-		// !!! 1st token generation
-		// ---
-
-		// Lets generate the first token
-		let curTokenObj = ai_utils.sampleLogits(
-			stateBuffer[0].logits,
-			temperature,
-			top_p
-		);
-
-		// Store the current output state
-		stateBuffer[0].outputStr = outputStr.slice();
-		stateBuffer[0].outputTokens = outputTokens.slice();
-
-		// And update the output string and token array
-		outputTokens.push(curTokenObj.token);
-		outputStr += tokenizer.decode([curTokenObj.token]);
-
-		// Subsequent token generation
-		// ---
-
-		// The current buffer index
-		let curBufferIndex = 0;
-		let nxtBufferIndex = 1;
-
-		// !!! main token gen loop
-		// ---
-
-		// Lets loop until we hit the max token count
-		// or one of the several stop sequence
-		for (let i = 1; i < maxTokens; i++) {
-			// Get the current state
-			let curState = stateBuffer[curBufferIndex].state;
-			// let curLogits = stateBuffer[curBufferIndex].logits;
-
-			// Get the target next state
-			let nxtState = stateBuffer[nxtBufferIndex].state;
-			let nxtLogits = stateBuffer[nxtBufferIndex].logits;
-
-			// Compute the next state
-			let evalRes = cpp_bind.rwkv_eval(
-				this._mainCtx,
-				curTokenObj.token,
-				curState,
-				nxtState,
-				nxtLogits
+			// Lets generate the first token
+			let curTokenObj = ai_utils.sampleLogits(
+				stateBuffer[0].logits,
+				temperature,
+				top_p
 			);
-			//
-			// Abort if eval failed
-			if (evalRes == false) {
-				throw new Error("Unexpected eval error during inference process");
-			}
 
-			// Compute the token to sample with the given logits settings
-			curTokenObj = ai_utils.sampleLogits(nxtLogits, temperature, top_p);
-
-			// Store it in the state buffer the current output state
-			stateBuffer[nxtBufferIndex].outputStr = outputStr.slice();
-			stateBuffer[nxtBufferIndex].outputTokens = outputTokens.slice();
+			// Store the current output state
+			stateBuffer[0].outputStr = outputStr.slice();
+			stateBuffer[0].outputTokens = outputTokens.slice();
 
 			// And update the output string and token array
-			let curTokenStr = tokenizer.decode([curTokenObj.token]);
 			outputTokens.push(curTokenObj.token);
-			outputStr += curTokenStr;
+			outputStr += tokenizer.decode([curTokenObj.token]);
 
-			// Increment the buffer indexes
-			curBufferIndex = nxtBufferIndex;
-			nxtBufferIndex++;
-			if (nxtBufferIndex >= BUFFER_SIZE) {
-				nxtBufferIndex = 0;
-			}
+			// The current buffer index
+			let curBufferIndex = 0;
+			let nxtBufferIndex = 1;
 
-			// Check if we hit a stop sequence
-			if (stopArr && stopArr.length > 0) {
-				// Get the last X string, for stop sequence matching
-				let lastXStr = outputStr.slice(-(stopSeqMaxLen * 2));
+			// ---
+			// !!! main token gen loop
+			// ---
 
-				// Check if any of the stop sequences match
-				for (const stopSeq of stopArr) {
-					if (lastXStr.indexOf(stopSeq) >= 0) {
-						stopSeqMatched = stopSeq;
+			// Lets loop until we hit the max token count
+			// or one of the several stop sequence
+			for (let i = 1; i < maxTokens; i++) {
+				// Get the current state
+				let curState = stateBuffer[curBufferIndex].state;
+				// let curLogits = stateBuffer[curBufferIndex].logits;
+
+				// Get the target next state
+				let nxtState = stateBuffer[nxtBufferIndex].state;
+				let nxtLogits = stateBuffer[nxtBufferIndex].logits;
+
+				// Compute the next state
+				let evalRes = cpp_bind.rwkv_eval(
+					workerCtx,
+					curTokenObj.token,
+					curState,
+					nxtState,
+					nxtLogits
+				);
+				//
+				// Abort if eval failed
+				if (evalRes == false) {
+					throw new Error("Unexpected eval error during inference process");
+				}
+
+				// Compute the token to sample with the given logits settings
+				curTokenObj = ai_utils.sampleLogits(nxtLogits, temperature, top_p);
+
+				// Store it in the state buffer the current output state
+				stateBuffer[nxtBufferIndex].outputStr = outputStr.slice();
+				stateBuffer[nxtBufferIndex].outputTokens = outputTokens.slice();
+
+				// And update the output string and token array
+				let curTokenStr = tokenizer.decode([curTokenObj.token]);
+				outputTokens.push(curTokenObj.token);
+				outputStr += curTokenStr;
+
+				// Increment the buffer indexes
+				curBufferIndex = nxtBufferIndex;
+				nxtBufferIndex++;
+				if (nxtBufferIndex >= BUFFER_SIZE) {
+					nxtBufferIndex = 0;
+				}
+
+				// Check if we hit a stop sequence
+				if (stopArr && stopArr.length > 0) {
+					// Get the last X string, for stop sequence matching
+					let lastXStr = outputStr.slice(-(stopSeqMaxLen * 2));
+
+					// Check if any of the stop sequences match
+					for (const stopSeq of stopArr) {
+						if (lastXStr.indexOf(stopSeq) >= 0) {
+							stopSeqMatched = stopSeq;
+							break;
+						}
+					}
+
+					if (stopSeqMatched) {
 						break;
 					}
 				}
 
-				if (stopSeqMatched) {
-					break;
+				// Handle output streaming
+				if (outputStream) {
+					let streamLimit = outputStr.length - stopSeqMaxLen * 2;
+					if (streamLimit > 0 && streamLimit > streamPos) {
+						outputStream(outputStr.slice(streamPos, streamLimit));
+						streamPos = streamLimit;
+					}
 				}
 			}
 
-			// Handle output streaming
-			if (outputStream) {
-				let streamLimit = outputStr.length - stopSeqMaxLen * 2;
-				if (streamLimit > 0 && streamLimit > streamPos) {
-					outputStream(outputStr.slice(streamPos, streamLimit));
-					streamPos = streamLimit;
-				}
-			}
-		}
-		// !!! finished the gen loop
-		// ---
-
-		// Check if its eligible for prompt caching
-		if (this._stateCache == null || opt.initState != null) {
-			// This is not eligible for prompt caching
-			// as either state cache is not enabled
-			// or an initial state was provided
-		} else if (outputTokens.length >= MIN_OUTPUT_TOKEN_SIZE_FOR_BUFFERING) {
-			// Store it into cache, only if there is sufficent distance from the previous cache entry
+			// ---
+			// !!! finished the gen loop
 			// ---
 
-			// Get the position of curBufferIndex - TOKEN_CACHE_OFFSET
-			let cacheBufferIndex = curBufferIndex - TOKEN_CACHE_OFFSET - 1;
-			if (cacheBufferIndex < 0) {
-				cacheBufferIndex += BUFFER_SIZE;
+			// Check if its eligible for prompt caching
+			if (self._stateCache == null || opt.initState != null) {
+				// This is not eligible for prompt caching
+				// as either state cache is not enabled
+				// or an initial state was provided
+			} else {
+				
+
+				// Get the cache buffer
+				let cacheState = stateBuffer[curBufferIndex];
+
+				// And store it into cache
+				let cacheStr = promptStartState.prompt + cacheState.outputStr;
+				self._stateCache[cacheStr] = {
+					state: cacheState.state,
+					logits: cacheState.logits,
+					prompt: cacheStr,
+					tokens: [].concat(promptStartState.tokens, cacheState.outputTokens),
+				};
 			}
 
-			// Get the cache buffer
-			let cacheState = stateBuffer[cacheBufferIndex];
-
-			// And store it into cache
-			let cacheStr = promptStartState.prompt + cacheState.outputStr;
-			this._stateCache[cacheStr] = {
-				state: cacheState.state,
-				logits: cacheState.logits,
-				prompt: cacheStr,
-				tokens: [].concat(promptStartState.tokens, cacheState.outputTokens),
-			};
-		}
-
-		// Return the result
-		return formatOutputObject();
+			// Return the result
+			return formatOutputObject();
+		});
 	}
 
 	/**
