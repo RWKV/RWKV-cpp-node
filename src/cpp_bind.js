@@ -4,6 +4,7 @@
 
 // Node deps
 const path = require("path")
+const util = require("util")
 
 // Get the koffi
 const koffi = require("koffi")
@@ -86,7 +87,7 @@ const rwkv_get_logits_len = rwkvKoffiBind.func('size_t rwkv_get_logits_len(CTX_H
 
 // Eval sequence
 const rwkv_eval = rwkvKoffiBind.func('bool rwkv_eval(CTX_HANDLE ctx, int32_t token, const float * state_in, _Out_ float * state_out, _Out_ float * logits_out)');
-const rwkv_eval_sequence = rwkvKoffiBind.func('bool rwkv_eval_sequence(CTX_HANDLE ctx, const uint32_t * tokens, size_t sequence_len, const float * state_in, _Out_ * state_out, _Out_ float * logits_out)');
+const rwkv_eval_sequence = rwkvKoffiBind.func('bool rwkv_eval_sequence(CTX_HANDLE ctx, const uint32_t * tokens, size_t sequence_len, const float * state_in, _Out_ float * state_out, _Out_ float * logits_out)');
 
 // // Unsupported functions (due to API integration limitation)
 // const rwkv_init_state = rwkvKoffiBind.func('void rwkv_init_state(CTX_HANDLE ctx, float * state)'); 
@@ -117,8 +118,6 @@ module.exports = {
 	 * Loads the model from a file and prepares it for inference.
 	 * Returns NULL on any error. Error messages would be printed to stderr.
 	 * 
-	 * (For async op, just call the <function-name>.async varient)
-	 * 
 	 * @param {String} model_file_path - path to model file in ggml format.
 	 * @param {Number} n_threads - number of CPU threads to use for inference.
 	 * 
@@ -132,8 +131,6 @@ module.exports = {
 	 * Each rwkv_context can have one eval running at a time.
 	 * Every rwkv_context must be freed using rwkv_free.
 	 * 
-	 * (For async op, just call the <function-name>.async varient)
-	 * 
 	 * @param {ffi_pointer} ctx - Pointer to the RWKV context.
 	 * @param {Number} n_threads - number of CPU threads to use for inference.
 	 * 
@@ -144,8 +141,6 @@ module.exports = {
 	/**
 	 * Offloads the specified layers to the GPU.
 	 * Returns false on any error. Error messages would be printed to stderr.
-	 * 
-	 * (For async op, just call the <function-name>.async varient)
 	 * 
 	 * @param {ffi_pointer} ctx - Pointer to the RWKV context.
 	 * @param {Number} n_gpu_layers - number of GPU layers to offload
@@ -158,8 +153,6 @@ module.exports = {
 	/**
 	 * Returns count of FP32 elements in state buffer.
 	 * 
-	 * (For async op, just call the <function-name>.async varient)
-	 * 
 	 * @param {ffi_pointer} ctx - Pointer to the RWKV context.
 	 * 
 	 * @returns {Number} The number of elements in the state buffer.
@@ -168,8 +161,6 @@ module.exports = {
 
 	/**
 	 * Returns count of FP32 elements in logits buffer.
-	 * 
-	 * (For async op, just call the <function-name>.async varient)
 	 * 
 	 * @param {ffi_pointer} ctx - Pointer to the RWKV context.
 	 * 
@@ -180,8 +171,6 @@ module.exports = {
 	/**
 	 * Returns count of FP32 number of layers
 	 * 
-	 * (For async op, just call the <function-name>.async varient)
-	 * 
 	 * @param {ffi_pointer} ctx - Pointer to the RWKV context.
 	 * 
 	 * @returns {Number} The number of layers
@@ -191,8 +180,6 @@ module.exports = {
 	/**
 	 * Returns count of FP32 number of embed params
 	 * 
-	 * (For async op, just call the <function-name>.async varient)
-	 * 
 	 * @param {ffi_pointer} ctx - Pointer to the RWKV context.
 	 * 
 	 * @returns {Number} The number of embed params
@@ -201,8 +188,6 @@ module.exports = {
 
 	/**
 	 * Returns count of FP32 number of vocab params
-	 * 
-	 * (For async op, just call the <function-name>.async varient)
 	 * 
 	 * @param {ffi_pointer} ctx - Pointer to the RWKV context.
 	 * 
@@ -216,8 +201,6 @@ module.exports = {
 	/**
 	 * Evaluates the model for a single token.
 	 * Returns false on any error. Error messages would be printed to stderr.
-	 * 
-	 * (For async op, just call the <function-name>.async varient)
 	 * 
 	 * @param {ffi_pointer} ctx - Pointer to the RWKV context.
 	 * @param {Number} token - The token to evaluate.
@@ -235,8 +218,6 @@ module.exports = {
 	 * Has to build a computation graph on the first call for a given sequence, but will use this cached graph for subsequent calls of the same sequence length.
 	 * Not thread-safe. For parallel inference, call rwkv_clone_context to create one rwkv_context for each thread.
 	 * Returns false on any error.
-	 * 
-	 * (For async op, just call the <function-name>.async varient)
 	 * 
 	 * @param tokens: pointer to an array of tokens. If NULL, the graph will be built and cached, but not executed: this can be useful for initialization.
 	 * @param sequence_len: number of tokens to read from the array.
@@ -279,10 +260,179 @@ module.exports = {
 	/**
 	 * Frees all allocated memory and the context.
 	 *
-	 * (For async op, just call the <function-name>.async varient)
-	 * 
 	 * @param {ffi_pointer} ctx - Pointer to the RWKV context.
 	 **/
 	rwkv_free: rwkv_free,
+
+	// ====
+	// Promise Varient
+	// ====
+	promises: {
+
+		/**
+		 * @async
+		 * 
+		 * Loads the model from a file and prepares it for inference.
+		 * Returns NULL on any error. Error messages would be printed to stderr.
+		 * 
+		 * @param {String} model_file_path - path to model file in ggml format.
+		 * @param {Number} n_threads - number of CPU threads to use for inference.
+		 * 
+		 * @returns {ffi_pointer} Pointer to the RWKV context.
+		 */
+		rwkv_init_from_file: util.promisify(rwkv_init_from_file.async),
+
+
+		/**
+		 * @async
+		 * 
+		 * Creates a new context from an existing one.
+		 * This can allow you to run multiple rwkv_eval's in parallel, without having to load a single model multiple times.
+		 * Each rwkv_context can have one eval running at a time.
+		 * Every rwkv_context must be freed using rwkv_free.
+		 * 
+		 * @param {ffi_pointer} ctx - Pointer to the RWKV context.
+		 * @param {Number} n_threads - number of CPU threads to use for inference.
+		 * 
+		 * @returns {ffi_pointer} Pointer to the new RWKV context.
+		 */
+		rwkv_clone_context: util.promisify(rwkv_clone_context.async),
+
+
+		/**
+		 * @async
+		 * 
+		 * Offloads the specified layers to the GPU.
+		 * Returns false on any error. Error messages would be printed to stderr.
+		 * 
+		 * @param {ffi_pointer} ctx - Pointer to the RWKV context.
+		 * @param {Number} n_gpu_layers - number of GPU layers to offload
+		 */
+		rwkv_gpu_offload_layers: util.promisify(rwkv_gpu_offload_layers.async),
+
+		/**
+		 * @async
+		 * 
+		 * Returns count of FP32 elements in state buffer.
+		 * 
+		 * @param {ffi_pointer} ctx - Pointer to the RWKV context.
+		 * 
+		 * @returns {Number} The number of elements in the state buffer.
+		 **/
+		rwkv_get_state_len: util.promisify(rwkv_get_state_len.async),
+
+		/**
+		 * @async
+		 * 
+		 * Returns count of FP32 elements in logits buffer.
+		 * 
+		 * @param {ffi_pointer} ctx - Pointer to the RWKV context.
+		 * 
+		 * @returns {Number} The number of elements in the logits buffer.
+		 **/
+		rwkv_get_logits_len: util.promisify(rwkv_get_logits_len.async),
+
+		/**
+		 * @async
+		 * 
+		 * Returns count of FP32 number of layers
+		 * 
+		 * @param {ffi_pointer} ctx - Pointer to the RWKV context.
+		 * 
+		 * @returns {Number} The number of layers
+		 **/
+		rwkv_get_n_layer: util.promisify(rwkv_get_n_layer.async),
+
+		/**
+		 * @async
+		 * 
+		 * Returns count of FP32 number of embed params
+		 * 
+		 * @param {ffi_pointer} ctx - Pointer to the RWKV context.
+		 * 
+		 * @returns {Number} The number of embed params
+		 **/
+		rwkv_get_n_embed: util.promisify(rwkv_get_n_embed.async),
+
+		/**
+		 * @async
+		 * 
+		 * Returns count of FP32 number of vocab params
+		 * 
+		 * @param {ffi_pointer} ctx - Pointer to the RWKV context.
+		 * 
+		 * @returns {Number} The number of embed params
+		 **/
+		rwkv_get_n_vocab: rwkv_get_n_vocab,
+
+		/**
+		 * @async
+		 * 
+		 * Evaluates the model for a single token.
+		 * Returns false on any error. Error messages would be printed to stderr.
+		 * 
+		 * @param {ffi_pointer} ctx - Pointer to the RWKV context.
+		 * @param {Number} token - The token to evaluate.
+		 * @param {ffi_pointer} state_in - The input state.
+		 * @param {ffi_pointer} state_out - The output state.
+		 * @param {ffi_pointer} logits_out - The output logits.
+		 * 
+		 * @returns {Boolean} True if successful, false if not.
+		 **/
+		rwkv_eval: util.promisify(rwkv_eval.async),
+
+		/** 
+		 * @async
+		 * 
+		 * Evaluates the model for a sequence of tokens.
+		 * Uses a faster algorithm than rwkv_eval if you do not need the state and logits for every token. Best used with batch sizes of 64 or so.
+		 * Has to build a computation graph on the first call for a given sequence, but will use this cached graph for subsequent calls of the same sequence length.
+		 * Not thread-safe. For parallel inference, call rwkv_clone_context to create one rwkv_context for each thread.
+		 * Returns false on any error.
+		 * 
+		 * @param tokens: pointer to an array of tokens. If NULL, the graph will be built and cached, but not executed: this can be useful for initialization.
+		 * @param sequence_len: number of tokens to read from the array.
+		 * @param state_in: FP32 buffer of size rwkv_get_state_len(), or NULL if this is a first pass.
+		 * @param state_out: FP32 buffer of size rwkv_get_state_len(). This buffer will be written to if non-NULL.
+		 * @param logits_out: FP32 buffer of size rwkv_get_logits_len(). This buffer will be written to if non-NULL.
+		 * 
+		 * @returns {Boolean} True if successful, false if not.
+		 **/
+		rwkv_eval_sequence: util.promisify(rwkv_eval_sequence.async),
+
+		/**
+		 * @async
+		 * 
+		 * Quantizes the model file.
+		 * Returns false on any error. Error messages would be printed to stderr.
+		 * 
+		 * Available format names:
+		 * - Q4_0
+		 * - Q4_1
+		 * - Q4_2
+		 * - Q5_0
+		 * - Q5_1
+		 * - Q8_0
+		 *
+		 * (For async op, just call the <function-name>.async varient)
+		 * 
+		 * @param {String} model_file_path_in - Path to the input model file in ggml format.
+		 * @param {String} model_file_path_out - Path to the output model file in ggml format.
+		 * @param {String} format_name - The quantization format to use.
+		 * 
+		 * @returns {Boolean} True if successful, false if not.
+		 **/
+		rwkv_quantize_model_file: util.promisify(rwkv_quantize_model_file.async),
+
+		/**
+		 * @async
+		 * 
+		 * Frees all allocated memory and the context.
+		 *
+		 * @param {ffi_pointer} ctx - Pointer to the RWKV context.
+		 **/
+		rwkv_free: util.promisify(rwkv_free.async),
+
+	}
 
 }
