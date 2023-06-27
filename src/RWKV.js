@@ -55,17 +55,17 @@ class RWKV {
 	 * - gpuOffload:     either the number of layers to offload, or a string ending with %
 	 *                   used to indicate the % of layers of offload from the model
 	 * 
-	 * - concurrent:		 the number of concurrent inferences to allow at a time
-	 * 							     (defaults to 1)
+	 * - concurrent:     the number of concurrent inferences to allow at a time
+	 * 	                 (defaults to 1)
 	 * 
-	 * - gpuBatchSize:   the batch size to use for GPU offloading
-	 * 							     (defaults to 64)
+	 * - batchSize:      the batch size to use for input inference handling
+	 *                   (defaults to 64)
 	 * 
 	 * - stateCacheSize: the hidden state cache size to use,
 	 *                   useful to speed up inference of a chat like model
 	 *                   (defaults to 50)
 	 *
-	 * @param {Object|string} config object, or the model path string
+	 * @param {Object|String} config object, or the model path string
 	 */
 	constructor(config) {
 		// Check if the config is a string, if so normalize it to a config obj
@@ -146,19 +146,28 @@ class RWKV {
 		// how this work is that inference task first goes into the shared queue,
 		// and gets split into their respective worker queues.
 		//
-		// This is done to prevent any single worker queue from pilling up
-		// to many 'large tasks', and cause a misbalance in task distribution.
+		// This is done to prevent any single worker queue from pilling up with
+		// too many 'large tasks', and cause a misbalance in task distribution.
 		let workQueueArr = [];
 		for(let i=0; i<concurrent; i++) {
 			workQueueArr.push(new promise_queue(1));
 		}
 		this._workQueueArr = workQueueArr;
-		this._sharedWorkQueue = new promise_queue(concurrent*3);
+		this._sharedWorkQueue = new promise_queue(concurrent * 2);
 
 		// Prepare the LRU cache with the configured cache size
 		//
-		// it is worth noting that the 7B model takes up about 2.64 MB for the state buffer,
-		// meaning you will need atleast 264 MB of RAM for a cachesize of 100
+		// it is worth noting that the 7B model takes up about 2.7 MB for the state buffer,
+		// meaning you will need atleast 270 MB of RAM for a cachesize of 100
+		//
+		// The following are the values stored in the cache
+		//
+		// [prompt] -> {
+		//	state: [state buffer],
+		//	logits: [logits buffer],
+		//	prompt: [prompt string],
+		//	tokens: [token array]
+		// }
 		// ---
 		// State cache, keeps the last N states in memory
 		if (config.stateCacheSize === false || config.stateCacheSize <= 0) {
@@ -170,7 +179,6 @@ class RWKV {
 				max: config.stateCacheSize || 50,
 			});
 		}
-
 	}
 
 	/**
@@ -193,8 +201,123 @@ class RWKV {
 	}
 
 	//-------------
+	// Queue handling ops
+	//-------------
+
+	/**
+	 * @private mehthod (do not use API directly, it will not be maintained)
+	 * 
+	 * For the given async function, assign it to a worker, with the shortest queue.
+	 * The function is only invoked when the worker is ready to accept the function.
+	 * 
+	 * This is used internally to distribute requests across worker contexts.
+	 * While limiting execution to only 1 per worker.
+	 * 
+	 * @param {Function} func - the async function to assign
+	 */
+	async _assignFunctionToWorker(func) {
+		// self ref
+		let self = this;
+
+		// First lets join the shared queue
+		await this._sharedWorkQueue.add(async () => {
+			// Get the worker with the shortest queue, for us to assign the function to
+			// ---
+			let shortestQueue = this._workQueueArr[0];
+			let shortestQueueIdx = 0;
+			let shortestQueueLength = shortestQueue.getPendingLength() + shortestQueue.getQueueLength();
+			for(let i=1; i<this._workQueueArr.length; i++) {
+				let candidateQueue = this._workQueueArr[i];
+				let candidateQueueLength = candidateQueue.getPendingLength() + candidateQueue.getQueueLength();
+				if( candidateQueueLength < shortestQueueLength ) {
+					shortestQueue = candidateQueue;
+					shortestQueueIdx = i;
+				}
+			}
+
+			// Join the worker specific queue
+			await shortestQueue.add(async () => {
+				// Invoke the function, with worker instance, and the queue index
+				await func(self._workCtxArray[shortestQueueIdx], shortestQueueIdx);
+			});
+		});
+	}
+
+	/**
+	 * The number of active worker processes
+	 * @returns {number} the number of active workers
+	 */
+	activeWorkCount() {
+		return this._sharedWorkQueue.getPendingLength();
+	}
+
+	/**
+	 * The number of pending work requests
+	 * @returns {number} the number of pending work requests
+	 */
+	pendingWorkCount() {
+		return this._sharedWorkQueue.getQueueLength();
+	}
+
+	//-------------
 	// Internal ops
 	//-------------
+
+	/**
+	 * @private mehthod (do not use API directly, it will not be maintained)
+	 *
+	 * Given the existing state, and the input string, get the completed hidden state buffer.
+	 * This operation DOES NOT use the internal cache.
+	 *
+	 * @param {Float32Array} inState - existing state to compute from
+	 * @param {Array<number>} tokenArr - array of tokens to compute
+	 * @param {*} workerCtx - the worker context to use
+	 *
+	 * @returns {Object} the hidden state buffer and logits buffer
+	 */
+	_getHiddenState_fromExistingState_andTokenArr(inState, tokenArr, workerCtx) {
+		// Edge case handling when tokenArr is empty
+		if (tokenArr == null || tokenArr.length == 0) {
+			throw new Error("RWKV token array is empty");
+		}
+
+		// Get the batch size
+		let batchSize = this._config.batchSize || 64;
+
+		// Prepare the output state to use
+		let outputState = new Float32Array(this._state_size);
+
+		// Copy the input state into the output state
+		if (inState != null) {
+			outputState.set(inState);
+		}
+
+		// Prepare the logit buffer (can be ignored safely)
+		let logits = new Float32Array(this._logits_size);
+
+		// Compute the hidden state for each token
+		for (let i = 0; i < tokenArr.length; i += batchSize) {
+			const chunk = tokenArr.slice(i, i + batchSize);
+			if (
+				cpp_bind.rwkv_eval_sequence(
+					workerCtx || this._mainCtx,
+					chunk,
+					chunk.length,
+					outputState,
+					outputState,
+					logits
+				) == false
+			) {
+				throw new Error("RWKV unexpected eval failed");
+			}
+		}
+
+		// Return the output state
+		return {
+			state: outputState,
+			logits: logits,
+		};
+	}
 
 	/**
 	 * Internal function, throw if the context is not set
@@ -208,86 +331,17 @@ class RWKV {
 	/**
 	 * @private mehthod (do not use API directly, it will not be maintained)
 	 *
-	 * Given the existing state, and the input string, get the completed hidden state buffer.
-	 * This operation DOES NOT use the internal cache.
-	 *
-	 * @param {Float32Array} inState - existing state to compute from
-	 * @param {Array<number>} tokenArr - array of tokens to compute
-	 *
-	 * @returns {Object} the hidden state buffer and logits buffer
-	 */
-	_getHiddenState_fromExistingState_andTokenArr(inState, tokenArr) {
-		// If state is null, we start from scratch
-		if (state == null) {
-			state = new Float32Array(this._state_size);
-		}
-
-		// Edge case handling when tokenArr is empty
-		if (tokenArr == null || tokenArr.length == 0) {
-			throw new Error("RWKV token array is empty");
-		}
-
-		// Get the batch size
-		let batchSize = this._config.gpuBatchSize || 64;
-
-		// Prepare the output state to use
-		let outputState = new Float32Array(this._state_size);
-
-		// Copy the state into the output state
-		outputState.set(inState);
-
-		// Prepare the logit buffer (to be ignored sadly)
-		let logits = new Float32Array(this._logits_size);
-
-		// Compute the hidden state for each token
-		for (let i = 0; i < tokenArr.length; i += batchSize) {
-			const chunk = tokenArr.slice(i, i + batchSize);
-			if (
-				cpp_bind.rwkv_eval_sequence(
-					this._mainCtx,
-					chunk,
-					chunk.length,
-					outputState,
-					outputState,
-					logits
-				) == false
-			) {
-				throw new Error("RWKV unexpected eval failed");
-			}
-		}
-
-		// for( const token of tokenArr ) {
-		// 	if( cpp_bind.rwkv_eval(
-		// 		this._mainCtx,
-		// 		token,
-		// 		outputState,
-		// 		outputState,
-		// 		logits
-		// 	) == false ) {
-		// 		throw new Error("RWKV unexpected eval failed");
-		// 	}
-		// }
-
-		// Return the output state
-		return {
-			state: outputState,
-			logits: logits,
-		};
-	}
-
-	/**
-	 * @private mehthod (do not use API directly, it will not be maintained)
-	 *
 	 * Given the input string, get the hidden state buffer.
 	 * Fetching it from the internal cache when possible.
 	 *
 	 * Also updates the cache with a copy of the new state
 	 *
 	 * @param {String} input string to get the hidden state for
+	 * @param {*} workerCtx - the worker context to use
 	 *
 	 * @returns {Object} the hidden state buffer and logits buffer, along with input string and tokens
 	 */
-	_getHiddenState_fromFullInputString(input) {
+	_getHiddenState_fromFullInputString(input, workerCtx) {
 		// Existing cached state obj
 		let cachedState = null;
 
