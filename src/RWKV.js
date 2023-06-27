@@ -5,7 +5,7 @@
 const fs = require("fs")
 const os = require("os");
 const tokenizer = require("rwkv-tokenizer-node");
-const cpp_bind = require("./cpp_bind");
+const cpp_bind = require("./cpp_bind").promises;
 const ai_utils = require("./ai_utils");
 const LRUCache = require("lru-cache");
 const promise_queue = require("promise-queue");
@@ -94,12 +94,12 @@ class RWKV {
 		this._fileSize = fileSize;
 		
 		// Load the cpp context, and store it
-		let mainCtx = await cpp_bind.rwkv_init_from_file.async(config.path, config.threads);
+		let mainCtx = await cpp_bind.rwkv_init_from_file(config.path, config.threads);
 		this._mainCtx = mainCtx;
 
 		// Get the state and logits size
-		this._state_size = await cpp_bind.rwkv_get_state_len.async(mainCtx);
-		this._logits_size = await cpp_bind.rwkv_get_logits_len.async(mainCtx);
+		this._state_size = await cpp_bind.rwkv_get_state_len(mainCtx);
+		this._logits_size = await cpp_bind.rwkv_get_logits_len(mainCtx);
 
 		// Offload layers
 		let gpu_layers = config.gpuOffload || 0;
@@ -108,7 +108,7 @@ class RWKV {
 			let gpu_layers_percent = parseInt(gpu_layers);
 
 			// Get the number of layers
-			let num_layers = await cpp_bind.rwkv_get_n_layer.async(mainCtx);
+			let num_layers = await cpp_bind.rwkv_get_n_layer(mainCtx);
 
 			// Compute the number of layers to offload
 			gpu_layers = Math.floor(num_layers * gpu_layers_percent / 100);
@@ -116,7 +116,7 @@ class RWKV {
 
 		// GPU offloading if needed
 		if (gpu_layers > 0) {
-			await cpp_bind.rwkv_gpu_offload_layers.async(mainCtx, gpu_layers);
+			await cpp_bind.rwkv_gpu_offload_layers(mainCtx, gpu_layers);
 		}
 
 		// Get the number of concurrent inferences
@@ -125,7 +125,7 @@ class RWKV {
 		// Prepare the work ctx array, used for seperate concurrent inferences
 		let workCtxArray = [mainCtx];
 		for(let i=1; i<concurrent; i++) {
-			workCtxArray.push(await cpp_bind.rwkv_clone_context.async(mainCtx, config.threads));
+			workCtxArray.push(await cpp_bind.rwkv_clone_context(mainCtx, config.threads));
 		}
 		this._workCtxArray = workCtxArray;
 
@@ -175,13 +175,13 @@ class RWKV {
 		// Destroy the context array
 		if(this._workCtxArray) {
 			for(let i=this._workCtxArray.length - 1; i>=1; i--) {
-				await cpp_bind.rwkv_free.async(this._workCtxArray[i]);
+				await cpp_bind.rwkv_free(this._workCtxArray[i]);
 			}
 			this._workCtxArray = null;
 		}
 		// Destroy the main context
 		if (this._mainCtx) {
-			let p = cpp_bind.rwkv_free.async(this._mainCtx);
+			let p = await cpp_bind.rwkv_free(this._mainCtx);
 			this._mainCtx = null;
 			await p;
 		}
@@ -207,7 +207,7 @@ class RWKV {
 		let self = this;
 
 		// First lets join the shared queue
-		await this._sharedWorkQueue.add(async () => {
+		return await this._sharedWorkQueue.add(async () => {
 			// Get the worker with the shortest queue, for us to assign the function to
 			// ---
 			let shortestQueue = this._workQueueArr[0];
@@ -223,9 +223,9 @@ class RWKV {
 			}
 
 			// Join the worker specific queue
-			await shortestQueue.add(async () => {
+			return await shortestQueue.add(async () => {
 				// Invoke the function, with worker instance, and the queue index
-				await func(self._workCtxArray[shortestQueueIdx], shortestQueueIdx);
+				return await func(self._workCtxArray[shortestQueueIdx], shortestQueueIdx);
 			});
 		});
 	}
@@ -272,7 +272,7 @@ class RWKV {
 		}
 
 		// Get the batch size
-		let batchSize = this._config.batchSize || 64;
+		let batchSize = this._config.batchSize || 1;
 
 		// Prepare the output state to use
 		let outputState = new Float32Array(this._state_size);
@@ -289,7 +289,7 @@ class RWKV {
 		for (let i = 0; i < tokenArr.length; i += batchSize) {
 			const chunk = tokenArr.slice(i, i + batchSize);
 			if (
-				(await cpp_bind.rwkv_eval_sequence.async(
+				(await cpp_bind.rwkv_eval_sequence(
 					workerCtx,
 					chunk,
 					chunk.length,
@@ -373,8 +373,8 @@ class RWKV {
 					}
 
 					// We found a matching state, we break from here
-					// Convert candidateState to cacheState
-					cacheState = candidateState;
+					// Convert candidateState to cachedState
+					cachedState = candidateState;
 					break;
 				}
 			}
@@ -415,7 +415,7 @@ class RWKV {
 		let fullTokenArr = initTokens.concat(remainingTokens);
 
 		// Compute the cachable hidden state from the existing state and the cachable tokens
-		let finalState = await this._getHiddenState_fromExistingState_andTokenArr.async(
+		let finalState = await this._getHiddenState_fromExistingState_andTokenArr(
 			initState,
 			remainingTokens,
 			workerCtx
@@ -689,7 +689,7 @@ class RWKV {
 				let nxtLogits = stateBuffer[nxtBufferIndex].logits;
 
 				// Compute the next state
-				let evalRes = await cpp_bind.rwkv_eval.async(
+				let evalRes = await cpp_bind.rwkv_eval(
 					workerCtx,
 					curTokenObj.token,
 					curState,
