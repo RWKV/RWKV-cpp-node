@@ -262,7 +262,7 @@ class RWKV {
 	 *
 	 * @returns {Object} the hidden state buffer and logits buffer
 	 */
-	_getHiddenState_fromExistingState_andTokenArr(inState, tokenArr, workerCtx) {
+	async _getHiddenState_fromExistingState_andTokenArr(inState, tokenArr, workerCtx) {
 		// Edge case handling when tokenArr is empty
 		if (tokenArr == null || tokenArr.length == 0) {
 			throw new Error("RWKV token array is empty");
@@ -289,14 +289,14 @@ class RWKV {
 		for (let i = 0; i < tokenArr.length; i += batchSize) {
 			const chunk = tokenArr.slice(i, i + batchSize);
 			if (
-				cpp_bind.rwkv_eval_sequence(
+				(await cpp_bind.rwkv_eval_sequence.async(
 					workerCtx,
 					chunk,
 					chunk.length,
 					outputState,
 					outputState,
 					logits
-				) == false
+				)) == false
 			) {
 				throw new Error("RWKV unexpected eval failed");
 			}
@@ -327,11 +327,12 @@ class RWKV {
 	 * Also updates the cache with a copy of the new state
 	 *
 	 * @param {String} input string to get the hidden state for
+	 * @param {Array<number>} inputTokens - array of tokens to compute
 	 * @param {*} workerCtx - the worker context to use
 	 *
 	 * @returns {Object} the hidden state buffer and logits buffer, along with input string and tokens
 	 */
-	_getHiddenState_fromFullInputString(input, workerCtx) {
+	async _getHiddenState_fromFullInputString(input, inputTokens, workerCtx) {
 		// Existing cached state obj
 		let cachedState = null;
 
@@ -355,14 +356,26 @@ class RWKV {
 			// Loop over the keys, see if we can find a match
 			for (const prefixKey of keys) {
 				if (input.startsWith(prefixKey)) {
-					// Found a matching key, we continue from there
-					cachedState = this._stateCache.get(prefixKey);
-
-					// Check if the get operation was successful
-					if (cachedState) {
-						// We found a match, break out of the loop
-						break;
+					// Found a matching key, lets proceed to check the tokens
+					let candidateState = this._stateCache.get(prefixKey);
+					if( candidateState == null ) {
+						// candidate state was evicted from cache, skip
+						continue;
 					}
+
+					// Check if the token array matches
+					let inputTokensSlice = inputTokens.slice(candidateState.tokens.length);
+					for( let i=0; i<inputTokensSlice.length; i++ ) {
+						if( inputTokensSlice[i] != candidateState.tokens[i] ) {
+							// Token mismatch, we continue, to next candidate
+							continue;
+						}
+					}
+
+					// We found a matching state, we break from here
+					// Convert candidateState to cacheState
+					cacheState = candidateState;
+					break;
 				}
 			}
 		}
@@ -402,7 +415,7 @@ class RWKV {
 		let fullTokenArr = initTokens.concat(remainingTokens);
 
 		// Compute the cachable hidden state from the existing state and the cachable tokens
-		let finalState = this._getHiddenState_fromExistingState_andTokenArr(
+		let finalState = await this._getHiddenState_fromExistingState_andTokenArr.async(
 			initState,
 			remainingTokens,
 			workerCtx
@@ -484,17 +497,19 @@ class RWKV {
 			// The prompt state obj to use (after processing the prompt)
 			let promptStartState = null;
 
+			// Convert the prompt into tokens
+			let promptTokens = tokenizer.encode(opt.prompt);
+
 			// Get the starting state
 			if (opt.initState) {
 				// This skips the cache, as we are using an existing state
-				let promptTokens = tokenizer.encode(opt.prompt);
-				promptStartState = self._getHiddenState_fromExistingState_andTokenArr(
-					opt.initState,
-					promptTokens,
-					workerCtx
+				promptStartState = await self._getHiddenState_fromExistingState_andTokenArr(
+					opt.initState, promptTokens, workerCtx
 				);
 			} else {
-				promptStartState = self._getHiddenState_fromFullInputString(opt.prompt, workerCtx);
+				promptStartState = await self._getHiddenState_fromFullInputString(
+					opt.prompt, promptTokens, workerCtx
+				);
 			}
 
 			// Propmpt completion timer
@@ -674,7 +689,7 @@ class RWKV {
 				let nxtLogits = stateBuffer[nxtBufferIndex].logits;
 
 				// Compute the next state
-				let evalRes = cpp_bind.rwkv_eval(
+				let evalRes = await cpp_bind.rwkv_eval.async(
 					workerCtx,
 					curTokenObj.token,
 					curState,
@@ -744,8 +759,6 @@ class RWKV {
 				// as either state cache is not enabled
 				// or an initial state was provided
 			} else {
-				
-
 				// Get the cache buffer
 				let cacheState = stateBuffer[curBufferIndex];
 
@@ -770,8 +783,8 @@ class RWKV {
 	 *
 	 * @param {String} prompt
 	 */
-	preloadPrompt(prompt) {
-		this.completion({ prompt: prompt, max_tokens: 0 });
+	async preloadPrompt(prompt) {
+		await this.completion({ prompt: prompt, max_tokens: 0 });
 	}
 }
 
