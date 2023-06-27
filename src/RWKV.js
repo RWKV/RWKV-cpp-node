@@ -10,19 +10,6 @@ const ai_utils = require("./ai_utils");
 const LRUCache = require("lru-cache");
 const promise_queue = require("promise-queue");
 
-//
-// Token cache offset which we use
-// this is used to intentionally to avoid caching the last few tokens of any given input
-// which may be represented by a different token value, when merged with a larger input
-//
-const TOKEN_CACHE_OFFSET = 2;
-
-//
-// Minimum output token size for buffer eligibility, for output buffering
-// This should strictly be greater than the TOKEN_CACHE_OFFSET by a few tokens
-//
-const MIN_OUTPUT_TOKEN_SIZE_FOR_BUFFERING = 5;
-
 //---------------------------
 // Implementation
 //---------------------------
@@ -280,6 +267,9 @@ class RWKV {
 		if (tokenArr == null || tokenArr.length == 0) {
 			throw new Error("RWKV token array is empty");
 		}
+		if( workerCtx == null ) {
+			throw new Error("RWKV worker context is null");
+		}
 
 		// Get the batch size
 		let batchSize = this._config.batchSize || 64;
@@ -300,7 +290,7 @@ class RWKV {
 			const chunk = tokenArr.slice(i, i + batchSize);
 			if (
 				cpp_bind.rwkv_eval_sequence(
-					workerCtx || this._mainCtx,
+					workerCtx,
 					chunk,
 					chunk.length,
 					outputState,
@@ -411,79 +401,25 @@ class RWKV {
 		let remainingTokens = tokenizer.encode(remainingInput);
 		let fullTokenArr = initTokens.concat(remainingTokens);
 
-		// If remaining token count <= TOKEN_CACHE_OFFSET
-		// it means that its ineligible for caching
-		//
-		// Alternatively if _stateCache is disabled
-		//
-		// So just do a simple compute and return
-		// ---
-		if (
-			remainingTokens.length <= TOKEN_CACHE_OFFSET ||
-			this._stateCache == null
-		) {
-			// Compute the hidden state from the existing state and the remaining tokens
-			let ans = this._getHiddenState_fromExistingState_andTokenArr(
-				initState,
-				remainingTokens
-			);
-
-			// Return full state obj
-			return {
-				state: ans.state,
-				logits: ans.logits,
-				prompt: input,
-				tokens: fullTokenArr,
-				cachedTokenSize: cachedState ? cachedState.tokens.length : 0,
-			};
-		}
-
-		// The request is eligible for caching, we compute the hidden state
-		// into two parts, the cachable part and the non-cachable part
-		//
-		// Also we can assume caching is enabled
-		// ---
-
-		// Get the cachable tokens, and the non-cachable tokens
-		let remaining_cachableTokens = remainingTokens.slice(
-			0,
-			remainingTokens.length - TOKEN_CACHE_OFFSET
-		);
-		let remaining_nonCachableTokens = remainingTokens.slice(
-			remainingTokens.length - TOKEN_CACHE_OFFSET
-		);
-
 		// Compute the cachable hidden state from the existing state and the cachable tokens
-		let cachableState = this._getHiddenState_fromExistingState_andTokenArr(
+		let finalState = this._getHiddenState_fromExistingState_andTokenArr(
 			initState,
-			remaining_cachableTokens
+			remainingTokens,
+			workerCtx
 		);
 
-		// And its associated values
-		let remaining_cachableTokens_str = tokenizer.decode(
-			remaining_cachableTokens
-		);
-		let cachableStr = initInput + remaining_cachableTokens_str;
-		let cachableTokens = initTokens.concat(remaining_cachableTokens);
-
-		// Lets store the cachable state into the cache
-		this._stateCache.set(cachableStr, {
-			state: cachableState.state,
-			logits: cachableState.logits,
-			prompt: cachableStr,
-			tokens: cachableTokens,
+		// Lets store the result in the cache
+		this._stateCache.set(input, {
+			state: finalState.state,
+			logits: finalState.logits,
+			prompt: input,
+			tokens: fullTokenArr,
 		});
-
-		// Compute the non-cachable hidden state from the existing state and the non-cachable tokens
-		let nonCachableState = this._getHiddenState_fromExistingState_andTokenArr(
-			cachableState.state,
-			remaining_nonCachableTokens
-		);
 
 		// Return the full state obj
 		return {
-			state: nonCachableState.state,
-			logits: nonCachableState.logits,
+			state: finalState.state,
+			logits: finalState.logits,
 			prompt: input,
 			tokens: fullTokenArr,
 			cachedTokenSize: cachedState ? cachedState.tokens.length : 0,
