@@ -1,6 +1,17 @@
 #!/usr/bin/env node
 
 // ---------------------------
+// Check if node version is >= 18
+// ---------------------------
+
+const nodeVersion = process.versions.node;
+const nodeMajorVersion = Number(nodeVersion.split('.')[0]);
+if (nodeMajorVersion < 18) {
+	console.error(`Node version ${nodeVersion} is not supported. Please use node >= 18`);
+	process.exit(1);
+}
+
+// ---------------------------
 // Dependencies
 // ---------------------------
 
@@ -10,7 +21,6 @@ const path = require('path');
 const crypto = require('crypto');
 const ProgressBar = require('progress');
 const RWKV = require("./RWKV");
-
 const inquirerPromise = import('inquirer');
 
 // ---------------------------
@@ -23,7 +33,6 @@ const inquirerPromise = import('inquirer');
 const RWKV_MODELS = require("./rwkv_models");
 const RWKV_CLI_DIR = path.join(os.homedir(), '.rwkv');
 const CONFIG_FILE = path.join(RWKV_CLI_DIR, 'config.json');
-const DOWNLOAD_CHUNK_SIZE = 1024;
 
 let threadCount = 6;
 let layers = 0;
@@ -258,8 +267,6 @@ async function performSetup() {
 
 async function startChatBot(modelPath) {
 	
-
-
 	// Load the chatbot
 	console.log(`--------------------------------------`)
 	console.log(`Starting RWKV chat mode`)
@@ -267,6 +274,7 @@ async function startChatBot(modelPath) {
 	console.log(`Loading model from ${modelPath} ...`)
 
 	const raven = new RWKV(modelPath, threadCount, layers);
+	await raven.setup();
 
 	// User / bot label name
 	const user = "User";
@@ -275,33 +283,6 @@ async function startChatBot(modelPath) {
 
 	// The chat bot prompt to use
 	const prompt = [
-		
-			"",
-		`\nThe following is a verbose and detailed conversation between an AI assistant called Bot, and a human user called User.`,
-		"",
-		`Bot is intelligent, knowledgeable, wise and polite.`,
-		"",
-		`\n\nUser: french revolution what year\n\n`,
-		"",
-		`Bot: The French Revolution started in 1789, and lasted 10 years until 1799.\n\n`,
-		"",
-		`User: 3+5=?\n\n`,
-		"",
-		`Bot: The answer is 8.\n\n`,
-		"",
-		`User: guess i marry who ?\n\n`,
-		"",
-		`Bot: Only if you tell me more about yourself - what are your interests?\n\n`,
-		"",
-		`User: solve for a: 9-a=2\n\n`,
-		"",
-		`Bot: The answer is a = 7, because 9 - 7 = 2.\n\n`,
-		"",
-		`User: wat is lhc\n\n`,
-		"",
-		`Bot: LHC is a high-energy particle collider, built by CERN, and completed in 2008. They used it to confirm the existence of the Higgs boson in 2012.\n\n"`
-		
-	/*
 		"",
 		`The following is a verbose detailed conversation between ${user} and a young women ${bot}. ${bot} is intelligent, friendly and cute. ${bot} is unlikely to disagree with ${user}.`,
 		"",
@@ -314,15 +295,13 @@ async function startChatBot(modelPath) {
 		`${bot}${interface} Not at all! I'm listening.`,
 		"",
 		""
-	*/
 	].join("\n");
 
-	// Preload the prompt
-	console.log(`Preloading the prompt: ${prompt}`);
-	raven.preloadPrompt(prompt);
+	// Preload the prompt, this helps make the first response faster
+	let firstLoadPromise = raven.preloadPrompt(prompt);
 
 	// Log the start of the conversation
-	console.log(`The following is a conversation between ${user} the user and ${bot} the chatbot.`)
+	console.log(`The following is a conversation between the ${user} and the ${bot} ...`)
 	console.log(`--------------------------------------`)
 
 	// The chat history
@@ -339,19 +318,22 @@ async function startChatBot(modelPath) {
 				return (value||"").trim().length > 0;
 			}
 		}]);
+		
+		// Ensure first load finished
+		await firstLoadPromise;
 
 		// Add the user input to the chat history
 		chatHistory += `${user}${interface} ${res.userInput}\n\n${bot}:`;
 
 		// Run the completion
 		process.stdout.write(`${bot}: `);
-		res = raven.completion({
+		res = await raven.completion({
 			prompt: chatHistory,
-			max_tokens: 200,
+			max_tokens: 2000,
 			streamCallback: (text) => {
 				process.stdout.write(text);
 			},
-			stop: ["\nuser:", "\nUser:"]
+			stop: [`\n${bot}:`, `\n${user}:`]
 		});
 		// console.log(res);
 		chatHistory += `${res.completion.trim()}\n\n`;
@@ -363,14 +345,15 @@ async function runDragonPrompt(modelPath) {
 	console.log(`Loading model from ${modelPath} ...`)
 	console.log(`--------------------------------------`)
 	const raven = new RWKV(modelPath, threadCount, layers);
+	await raven.setup();
 
 	// The demo prompt for RWKV
 	const dragonPrompt = '\nIn a shocking finding, scientist discovered a herd of dragons living in a remote, previously unexplored valley, in Tibet. Even more surprising to the researchers was the fact that the dragons spoke perfect Chinese.'
 	console.log(`Running the test dragon prompt: ${dragonPrompt}`);
-	raven.preloadPrompt(dragonPrompt);
+	await raven.preloadPrompt(dragonPrompt);
 
 	// Does the actual demo execution
-	let res = raven.completion({
+	let res = await raven.completion({
 		prompt: dragonPrompt,
 		max_tokens: 1000,
 		streamCallback: (text) => {
@@ -387,14 +370,6 @@ async function runDragonPrompt(modelPath) {
 // ---------------------------
 // CLI handling
 // ---------------------------
-
-class rwkv_model {
-	constructor(modelpath, threadcount, layers) {
-	  this.modelpath = modelpath;
-	  this.threadcount = threadcount;
-	  this.layers = layers;
-	}
-  }
 
 // Run the CLI within an async function
 (async function() {
@@ -417,7 +392,6 @@ class rwkv_model {
 	}
 
 	// check if args contains '--threadCount' and set threadcount to the next arg if not specified default to 6
-
 	if (args.indexOf('--threadcount') >= 0) {
 		let _threadCount = args[args.indexOf('--threadcount') + 1];
 		try {
@@ -479,8 +453,6 @@ class rwkv_model {
 		await runDragonPrompt(modelPath);
 		return;
 	}
-	modelArgs = new rwkv_model(modelPath, parseInt(threadCount), layers);
-//todo: find why i need to parse int here again.
 
 	// Call the main start chat bot instead
 	await startChatBot(modelPath);
