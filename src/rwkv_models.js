@@ -22,13 +22,13 @@ module.exports = [
 	},
 	{ 
 		label: 'raven 7B v12 Q8(Small, Fast)', 
-		name: "raven_7b_v12x_q8_0.bin",
+		name: "raven_7b_v12_q8_0.bin",
 		url: 'https://huggingface.co/latestissue/rwkv-4-raven-ggml-quantized/resolve/main/q8_0-RWKV-4-Raven-7B-v12-Eng98%25-Other2%25-20230521-ctx8192.bin',
 		sha256: 'e7791301a8373f34b4b3e70eb49e8a703f1286d40216e52329530bd103a80f80',
 		size: 8245124541
 	},
 	{ 
-		label: 'raven 14B v12x (Q8_0, Bigger, better)',
+		label: 'raven 14B v12 (Q8_0, Bigger, better)',
 		name: "raven_14b_v12_Q8_0.bin",
 		url: 'https://huggingface.co/latestissue/rwkv-4-raven-ggml-quantized/resolve/main/q8_0-RWKV-4-Raven-14B-v12-Eng98%25-Other2%25-20230523-ctx8192.bin',
 		sha256: '0048bc57136302d7f4de9e51437afae0b0c86962bc0d94e0494261da19d076dc',
