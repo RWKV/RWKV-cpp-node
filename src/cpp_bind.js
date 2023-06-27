@@ -15,8 +15,6 @@ const koffi = require("koffi")
 // The lib path to use
 let rwkvCppLibPath = null;
 
-// console.log("ARCH", process.arch);
-
 // Check which platform we're on
 if( process.arch === 'arm64' ) {
 	if( process.platform === 'darwin' ) {
@@ -31,12 +29,13 @@ if( process.arch === 'arm64' ) {
 		// We only do CPU feature detection in windows
 		// due to the different libraries with varients in AVX support
 		//
-		// Note as this is an optional dependency, it can fail to load
+		// Note as this is an optional dependency, 
+		// it can fail to load/compile for random reasons
 		let cpuFeatures = null;
 		try {
 			cpuFeatures = require('cpu-features')();
 		} catch( err ) {
-			// Silently ignore, we assume avx
+			// Silently ignore, we assume only avx is supported
 		}
 	
 		// Load the highest AVX supported CPU when possible
@@ -68,40 +67,39 @@ const rwkvCppFullLibPath = path.resolve( __dirname, "..", rwkvCppLibPath);
 // Lib binding loading
 //---------------------------
 
-// // Setup the FFI RWKV binding
-// const rwkvFFiBind = ffi.Library(
-// 	// The library path
-// 	rwkvCppFullLibPath,
-// 	// The functions to bind
-// 	{
-// 		// rwkv_context * rwkv_init_from_file(const char * model_file_path, uint32_t n_threads);
-// 		'rwkv_init_from_file': ['pointer', ['CString', 'uint32']],
-// 		// void rwkv_free(struct rwkv_context * ctx);
-// 		'rwkv_free': ['void', ['pointer']],
-// 		// bool rwkv_eval(struct rwkv_context * ctx, int32_t token, float * state_in, float * state_out, float * logits_out);
-// 		'rwkv_eval': ['bool', ['pointer', 'int32', 'pointer', 'pointer', 'pointer']],
-// 		// uint32_t rwkv_get_state_buffer_element_count(struct rwkv_context * ctx);
-// 		'rwkv_get_state_buffer_element_count': ['uint32', ['pointer']],
-// 		// uint32_t rwkv_get_logits_buffer_element_count(struct rwkv_context * ctx);
-// 		'rwkv_get_logits_buffer_element_count': ['uint32', ['pointer']],
-// 		// bool rwkv_quantize_model_file(const char * model_file_path_in, const char * model_file_path_out, const char * format_name);
-// 		'rwkv_quantize_model_file': ['bool', ['CString', 'CString', 'CString']],
-// 		// const char * rwkv_get_system_info_string();
-// 		'rwkv_get_system_info_string': ['CString', []],
-// 	}
-// )
-
 const rwkvKoffiBind = koffi.load(rwkvCppFullLibPath);
+
+// Custom pointers, to avoid copying data to JS land
 const ctx_pointer = koffi.pointer('CTX_HANDLE', koffi.opaque());
+
+// Initializing / cloning process
 const rwkv_init_from_file = rwkvKoffiBind.func('CTX_HANDLE rwkv_init_from_file(const char * model_file_path, uint32_t n_threads)');
-const rwkv_free = rwkvKoffiBind.func('void rwkv_free(CTX_HANDLE ctx)');
-const rwkv_eval = rwkvKoffiBind.func('bool rwkv_eval(CTX_HANDLE ctx, int32_t token, _Inout_ float * state_in, _Inout_ float * state_out, _Inout_ float * logits_out)');
-const rwkv_get_state_buffer_element_count = rwkvKoffiBind.func('uint32_t rwkv_get_state_buffer_element_count(CTX_HANDLE)');
-const rwkv_get_logits_buffer_element_count = rwkvKoffiBind.func('uint32_t rwkv_get_logits_buffer_element_count(CTX_HANDLE)');
-const rwkv_gpu_offload_layers = rwkvKoffiBind.func('bool rwkv_gpu_offload_layers(CTX_HANDLE ctx, uint32_t gpu_id)');
-const rwkv_eval_sequence = rwkvKoffiBind.func('bool rwkv_eval_sequence(CTX_HANDLE ctx, const uint32_t * tokens, size_t sequence_len, _Inout_ const float * state_in, _Inout_ float * state_out, _Inout_ float * logits_out)');
+const rwkv_clone_context = rwkvKoffiBind.func('CTX_HANDLE rwkv_clone_context(CTX_HANDLE ctx, uint32_t n_threads)');
+const rwkv_gpu_offload_layers = rwkvKoffiBind.func('bool rwkv_gpu_offload_layers(CTX_HANDLE ctx, uint32_t n_gpu_layers)');
+
+// Model info extraction
+const rwkv_get_n_vocab = rwkvKoffiBind.func('size_t rwkv_get_n_vocab(CTX_HANDLE ctx)'); 
+const rwkv_get_n_embed = rwkvKoffiBind.func('size_t rwkv_get_n_embed(CTX_HANDLE ctx)');
+const rwkv_get_n_layer = rwkvKoffiBind.func('size_t rwkv_get_n_layer(CTX_HANDLE ctx)');
+const rwkv_get_state_len = rwkvKoffiBind.func('size_t rwkv_get_state_len(CTX_HANDLE ctx)');  
+const rwkv_get_logits_len = rwkvKoffiBind.func('size_t rwkv_get_logits_len(CTX_HANDLE ctx)');
+
+// Eval sequence
+const rwkv_eval = rwkvKoffiBind.func('bool rwkv_eval(CTX_HANDLE ctx, int32_t token, const float * state_in, _Out_ float * state_out, _Out_ float * logits_out)');
+const rwkv_eval_sequence = rwkvKoffiBind.func('bool rwkv_eval_sequence(CTX_HANDLE ctx, const uint32_t * tokens, size_t sequence_len, const float * state_in, _Out_ * state_out, _Out_ float * logits_out)');
+
+// // Unsupported functions (due to API integration limitation)
+// const rwkv_init_state = rwkvKoffiBind.func('void rwkv_init_state(CTX_HANDLE ctx, float * state)'); 
+// const rwkv_set_print_errors = rwkvKoffiBind.func('void rwkv_set_print_errors(CTX_HANDLE ctx, bool print_errors)');  
+// const rwkv_get_print_errors = rwkvKoffiBind.func('bool rwkv_get_print_errors(CTX_HANDLE ctx)');  
+// const rwkv_get_last_error = rwkvKoffiBind.func('enum rwkv_error_flags rwkv_get_last_error(CTX_HANDLE ctx)');
+// const rwkv_get_system_info_string = rwkvKoffiBind.func('const char * rwkv_get_system_info_string()');
+
+// Quantizing models
 const rwkv_quantize_model_file = rwkvKoffiBind.func('bool rwkv_quantize_model_file(const char * model_file_path_in, const char * model_file_path_out, const char * format_name)');
-const rwkv_get_system_info_string = rwkvKoffiBind.func('const char * rwkv_get_system_info_string()');
+
+// Context destruction
+const rwkv_free = rwkvKoffiBind.func('void rwkv_free(CTX_HANDLE ctx)');
 
 //---------------------------
 // Module export
@@ -112,34 +110,114 @@ module.exports = {
 	// The path to the lib used
 	_libPath: rwkvCppFullLibPath,
 
+	// Initializing / cloning process
+	// ---
+
 	/**
 	 * Loads the model from a file and prepares it for inference.
 	 * Returns NULL on any error. Error messages would be printed to stderr.
 	 * 
-	 * @param {String} model_file_path path to model file in ggml format.
-	 * @param {Number} n_threads number of threads to use for inference.
+	 * (For async op, just call the <function-name>.async varient)
+	 * 
+	 * @param {String} model_file_path - path to model file in ggml format.
+	 * @param {Number} n_threads - number of CPU threads to use for inference.
 	 * 
 	 * @returns {ffi_pointer} Pointer to the RWKV context.
 	 */
 	rwkv_init_from_file: rwkv_init_from_file,
 
 	/**
+	 * Creates a new context from an existing one.
+	 * This can allow you to run multiple rwkv_eval's in parallel, without having to load a single model multiple times.
+	 * Each rwkv_context can have one eval running at a time.
+	 * Every rwkv_context must be freed using rwkv_free.
+	 * 
+	 * (For async op, just call the <function-name>.async varient)
+	 * 
+	 * @param {ffi_pointer} ctx - Pointer to the RWKV context.
+	 * @param {Number} n_threads - number of CPU threads to use for inference.
+	 * 
+	 * @returns {ffi_pointer} Pointer to the new RWKV context.
+	 */
+	rwkv_clone_context: rwkv_clone_context,
+
+	/**
 	 * Offloads the specified layers to the GPU.
 	 * Returns false on any error. Error messages would be printed to stderr.
 	 * 
+	 * (For async op, just call the <function-name>.async varient)
+	 * 
+	 * @param {ffi_pointer} ctx - Pointer to the RWKV context.
+	 * @param {Number} n_gpu_layers - number of GPU layers to offload
 	 */
 	rwkv_gpu_offload_layers: rwkv_gpu_offload_layers,
 
+	// Model info extraction
+	// ---
+
 	/**
-	 * Frees all allocated memory and the context.
-	 *
+	 * Returns count of FP32 elements in state buffer.
+	 * 
+	 * (For async op, just call the <function-name>.async varient)
+	 * 
 	 * @param {ffi_pointer} ctx - Pointer to the RWKV context.
+	 * 
+	 * @returns {Number} The number of elements in the state buffer.
 	 **/
-	rwkv_free: rwkv_free,
+	rwkv_get_state_len: rwkv_get_state_len,
+
+	/**
+	 * Returns count of FP32 elements in logits buffer.
+	 * 
+	 * (For async op, just call the <function-name>.async varient)
+	 * 
+	 * @param {ffi_pointer} ctx - Pointer to the RWKV context.
+	 * 
+	 * @returns {Number} The number of elements in the logits buffer.
+	 **/
+	rwkv_get_logits_len: rwkv_get_logits_len,
+
+	/**
+	 * Returns count of FP32 number of layers
+	 * 
+	 * (For async op, just call the <function-name>.async varient)
+	 * 
+	 * @param {ffi_pointer} ctx - Pointer to the RWKV context.
+	 * 
+	 * @returns {Number} The number of layers
+	 **/
+	rwkv_get_n_layer: rwkv_get_n_layer,
+
+	/**
+	 * Returns count of FP32 number of embed params
+	 * 
+	 * (For async op, just call the <function-name>.async varient)
+	 * 
+	 * @param {ffi_pointer} ctx - Pointer to the RWKV context.
+	 * 
+	 * @returns {Number} The number of embed params
+	 **/
+	rwkv_get_n_embed: rwkv_get_n_embed,
+
+	/**
+	 * Returns count of FP32 number of vocab params
+	 * 
+	 * (For async op, just call the <function-name>.async varient)
+	 * 
+	 * @param {ffi_pointer} ctx - Pointer to the RWKV context.
+	 * 
+	 * @returns {Number} The number of embed params
+	 **/
+	rwkv_get_n_vocab: rwkv_get_n_vocab,
+
+	// Eval sequences
+	// ---
 
 	/**
 	 * Evaluates the model for a single token.
 	 * Returns false on any error. Error messages would be printed to stderr.
+	 * 
+	 * (For async op, just call the <function-name>.async varient)
 	 * 
 	 * @param {ffi_pointer} ctx - Pointer to the RWKV context.
 	 * @param {Number} token - The token to evaluate.
@@ -151,37 +229,27 @@ module.exports = {
 	 **/
 	rwkv_eval: rwkv_eval,
 
-	/**  Evaluates the model for a sequence of tokens.
-    * Uses a faster algorithm than rwkv_eval if you do not need the state and logits for every token. Best used with batch sizes of 64 or so.
-    * Has to build a computation graph on the first call for a given sequence, but will use this cached graph for subsequent calls of the same sequence length.
-    * Not thread-safe. For parallel inference, call rwkv_clone_context to create one rwkv_context for each thread.
-    * Returns false on any error.
-    * @param tokens: pointer to an array of tokens. If NULL, the graph will be built and cached, but not executed: this can be useful for initialization.
-    * @param sequence_len: number of tokens to read from the array.
-    * @param state_in: FP32 buffer of size rwkv_get_state_len(), or NULL if this is a first pass.
-    * @param state_out: FP32 buffer of size rwkv_get_state_len(). This buffer will be written to if non-NULL.
-    * @param logits_out: FP32 buffer of size rwkv_get_logits_len(). This buffer will be written to if non-NULL.
-	**/
-    rwkv_eval_sequence : rwkv_eval_sequence,
-
-	/**
-	 * Returns count of FP32 elements in state buffer.
+	/** 
+	 * Evaluates the model for a sequence of tokens.
+	 * Uses a faster algorithm than rwkv_eval if you do not need the state and logits for every token. Best used with batch sizes of 64 or so.
+	 * Has to build a computation graph on the first call for a given sequence, but will use this cached graph for subsequent calls of the same sequence length.
+	 * Not thread-safe. For parallel inference, call rwkv_clone_context to create one rwkv_context for each thread.
+	 * Returns false on any error.
 	 * 
-	 * @param {ffi_pointer} ctx - Pointer to the RWKV context.
+	 * (For async op, just call the <function-name>.async varient)
 	 * 
-	 * @returns {Number} The number of elements in the state buffer.
+	 * @param tokens: pointer to an array of tokens. If NULL, the graph will be built and cached, but not executed: this can be useful for initialization.
+	 * @param sequence_len: number of tokens to read from the array.
+	 * @param state_in: FP32 buffer of size rwkv_get_state_len(), or NULL if this is a first pass.
+	 * @param state_out: FP32 buffer of size rwkv_get_state_len(). This buffer will be written to if non-NULL.
+	 * @param logits_out: FP32 buffer of size rwkv_get_logits_len(). This buffer will be written to if non-NULL.
+	 * 
+	 * @returns {Boolean} True if successful, false if not.
 	 **/
-	rwkv_get_state_buffer_element_count: rwkv_get_state_buffer_element_count,
+	rwkv_eval_sequence : rwkv_eval_sequence,
 
-
-	/**
-	 * Returns count of FP32 elements in logits buffer.
-	 * 
-	 * @param {ffi_pointer} ctx - Pointer to the RWKV context.
-	 * 
-	 * @returns {Number} The number of elements in the logits buffer.
-	 **/
-	rwkv_get_logits_buffer_element_count: rwkv_get_logits_buffer_element_count,
+	// Quantizing models
+	// ---
 
 	/**
 	 * Quantizes the model file.
@@ -195,6 +263,8 @@ module.exports = {
 	 * - Q5_1
 	 * - Q8_0
 	 *
+	 * (For async op, just call the <function-name>.async varient)
+	 * 
 	 * @param {String} model_file_path_in - Path to the input model file in ggml format.
 	 * @param {String} model_file_path_out - Path to the output model file in ggml format.
 	 * @param {String} format_name - The quantization format to use.
@@ -203,12 +273,16 @@ module.exports = {
 	 **/
 	rwkv_quantize_model_file: rwkv_quantize_model_file,
 
-	/**
-	 * Returns a string with system information.
-	 *
-	 * @returns {String} The system information string.
-	 **/
-	rwkv_get_system_info_string: rwkv_get_system_info_string,
+	// Context destruction
+	// ---
 
+	/**
+	 * Frees all allocated memory and the context.
+	 *
+	 * (For async op, just call the <function-name>.async varient)
+	 * 
+	 * @param {ffi_pointer} ctx - Pointer to the RWKV context.
+	 **/
+	rwkv_free: rwkv_free,
 
 }
