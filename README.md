@@ -2,6 +2,8 @@
 
 Arguably the easiest way to get RWKV.cpp running on node.js. 
 
+**World model is not yet supported**
+
 ```.bash
 # Install globally
 npm install -g rwkv-cpp-node
@@ -14,6 +16,8 @@ rwkv-cpp-node
 > This is not a pure JS solution, and depends on the [precompiled RWKV.cpp binaries found here](https://github.com/saharNooby/rwkv.cpp)
 >
 > This currently runs purely on your CPU, while that means you can use nearly anything to run it, you also do not get any insane speed up with a GPU (yet)
+>
+> Additionally V2 breaks compatiblity with V1, due to changes in quantization weights.
 
 # What is RWKV?
 
@@ -108,11 +112,15 @@ And perform your own quantization conversion using the [original rwkv.cpp projec
 
 # JS Usage
 
+The JS interface for the RWKV model is async/promises based
+
 ```.javascript
 const RWKV = require("RWKV-cpp-node");
 
 // Load the module with the pre-qunatized cpp weights
 const raven = new RWKV("<path-to-your-model-bin-files>")
+
+// You must call the setup before completion
 await raven.setup();
 
 // Call the completion API
@@ -131,8 +139,22 @@ const raven = new RWKV({
 	path: "<path-to-your-model-bin-files>",
 
 	// Threads count to use, this is auto detected based on your number of vCPU
-	// if its not configured
-	threads: 8,
+	// if its not configured, uses 4 with gpu offloading, else uses half of vCPU detected
+	threads: 4,
+
+	// Number of layers (eg. 12), or % of the model (eg: 50%) to offload to the gpu
+	// defaults: 0
+	gpuOffload: 0,
+
+	// Number of concurrent inferences, the model is cloned while sharing the weights
+	// for each concurrent instances configured. This is only useful in server prod env
+	// deafults: 1
+	concurrent: 1,
+
+	// Batch size of the input to process, this is only useful with gpuOffload
+	// Defaults to 64 with gpuOffload, else 1
+	// ---
+	// batchSize: 64,
 
 	//
 	// Cache size for the RKWV state, This help optimize the repeated RWKV calls
@@ -146,13 +168,14 @@ const raven = new RWKV({
 	//
 	stateCacheSize: 50
 });
+await raven.setup();
 ```
 
 Completion API options
 
 ```.javascript
 // Lets perform a completion, with more options
-let res = raven.completion({
+let res = await raven.completion({
 
 	// The prompt to use
 	prompt: "<prompt str>",
@@ -179,8 +202,8 @@ let res = raven.completion({
 
 // Additionally if you have a commonly reused instruction set prefix, you can preload this
 // using either of the following (requires the stateCacheSize to not be disabled)
-raven.preloadPrompt( "<prompt prefix string>" )
-raven.completion({ prompt:"<prompt prefix string>", max_tokens:0 })
+await raven.preloadPrompt( "<prompt prefix string>" )
+await raven.completion({ prompt:"<prompt prefix string>", max_tokens:0 })
 ```
 
 Completion output format
@@ -229,18 +252,28 @@ let resFormat = {
 }
 ```
 
+# Want lower level CPP based binding access?
+
+You can call our cpp_bind interface code via
+
+```
+const cpp_bind = require("rwkv-cpp-node").cpp_bind;
+
+// You can find the code here : https://github.com/RWKV/RWKV-cpp-node/blob/main/src/cpp_bind.js
+```
+
 # What can be improved?
 
-- [Add GPU support via RWKV-cpp-cuda project](https://github.com/harrisonvanderbyl/rwkv-cpp-cuda)
+- ~~[Add GPU support via RWKV-cpp-cuda project](https://github.com/harrisonvanderbyl/rwkv-cpp-cuda)~~
 - [RWKV-tokenizer-node library performance](https://github.com/PicoCreator/RWKV-tokenizer-node/issues/1)
-- [Add MMAP support for RWKV.cpp](https://github.com/saharNooby/rwkv.cpp/issues/50)
-- [Reducing JS and RWKV.cpp back and forth for prompt eval](https://github.com/saharNooby/rwkv.cpp/pull/49)
+- ~~[Add MMAP support for RWKV.cpp](https://github.com/saharNooby/rwkv.cpp/issues/50)~~
+- ~~[Reducing JS and RWKV.cpp back and forth for prompt eval](https://github.com/saharNooby/rwkv.cpp/pull/49)~~
 - Validate and add support for X arch / OS 
 	- If your system is not supported, try to do a build on the rwkv.cpp project
 		- [Add it to the lib folder](https://github.com/PicoCreator/RWKV-cpp-node/tree/main/lib)
 		- [Modify the OS / Architecture detection code](https://github.com/PicoCreator/RWKV-cpp-node/blob/main/src/cpp_bind.js#L19)
-- Utility function to download the model weights / quantize them ??
-- CLI tooling to quickly setup / download ??
+- ~~Utility function to download the model weights / quantize them ??~~
+- ~~CLI tooling to quickly setup / download ??~~
 - varient of `preloadPrompt` which gurantee the saved prompt does not get cache evicted ??
 
 # Known issues
@@ -250,6 +283,11 @@ let resFormat = {
 # How to run the unit test?
 
 ```.bash
+# Download the test model
+mkdir -p ./raven/
+wget -O raven_1b5_v12_Q8_0.bin https://huggingface.co/latestissue/rwkv-4-raven-ggml-quantized/resolve/main/q8_0-RWKV-4-Raven-1B5-v12-Eng98%25-Other2%25-20230520-ctx4096.bin 
+
+# Run the test
 npm run test
 ```
 
