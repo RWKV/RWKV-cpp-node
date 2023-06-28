@@ -46,7 +46,7 @@ class RWKV {
 	 * 	                 (defaults to 1)
 	 * 
 	 * - batchSize:      the batch size to use for input inference handling
-	 *                   (defaults to 64)
+	 *                   (defaults to 64 if gpuOffload, else 1)
 	 * 
 	 * - stateCacheSize: the hidden state cache size to use,
 	 *                   useful to speed up inference of a chat like model
@@ -118,6 +118,7 @@ class RWKV {
 		if (gpu_layers > 0) {
 			await cpp_bind.rwkv_gpu_offload_layers(mainCtx, gpu_layers);
 		}
+		this._gpu_layers = gpu_layers;
 
 		// Get the number of concurrent inferences
 		let concurrent = config.concurrent || 1;
@@ -272,7 +273,15 @@ class RWKV {
 		}
 
 		// Get the batch size
-		let batchSize = this._config.batchSize || 1;
+		let batchSize = this._config.batchSize;
+
+		if( batchSize == null || batchSize <= 0 ) {
+			if( this._config._gpu_layers > 0 ) {
+				batchSize = 64;
+			} else {
+				batchSize = 1;
+			}
+		}
 
 		// Prepare the output state to use
 		let outputState = new Float32Array(this._state_size);
@@ -287,18 +296,33 @@ class RWKV {
 
 		// Compute the hidden state for each token
 		for (let i = 0; i < tokenArr.length; i += batchSize) {
-			const chunk = tokenArr.slice(i, i + batchSize);
-			if (
-				(await cpp_bind.rwkv_eval_sequence(
-					workerCtx,
-					chunk,
-					chunk.length,
-					outputState,
-					outputState,
-					logits
-				)) == false
-			) {
-				throw new Error("RWKV unexpected eval failed");
+			// Individual tokens
+			if( batchSize == 1 ) {
+				if (
+					(await cpp_bind.rwkv_eval(
+						workerCtx,
+						tokenArr[i],
+						outputState,
+						outputState,
+						logits
+					)) == false
+				) {
+					throw new Error("RWKV unexpected eval failed");
+				}
+			} else {
+				const chunk = tokenArr.slice(i, i + batchSize);
+				if (
+					(await cpp_bind.rwkv_eval_sequence(
+						workerCtx,
+						chunk,
+						chunk.length,
+						outputState,
+						outputState,
+						logits
+					)) == false
+				) {
+					throw new Error("RWKV unexpected eval failed");
+				}
 			}
 		}
 
@@ -604,7 +628,7 @@ class RWKV {
 						// Time per token
 						timePerPrompt:
 							promptDuration /
-							(promptStartState.tokens.length - promptStartState.cachedTokenSize),
+							(promptStartState.tokens.length - promptStartState?.cachedTokenSize || 0),
 						timePerCompletion: completionDuration / outputTokens.length,
 						timePerFullPrompt: promptDuration / promptStartState.tokens.length,
 					},
