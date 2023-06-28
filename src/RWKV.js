@@ -63,8 +63,10 @@ class RWKV {
 		}
 
 		// Get the CPU thread count
-		let threads = config.threads;
-		if (config.threads == null || threads <= 0) {
+		if (config.threads != null) {
+			config.threads = parseInt(config.threads);
+		}
+		if (config.threads == null || config.threads <= 0 || isNaN(config.threads)) {
 			if( config.gpuOffload != null && parseInt(config.gpuOffload) > 0) {
 				// With gpu offloading, the optimal seems to be a light mix of cpu
 				config.threads = 4;

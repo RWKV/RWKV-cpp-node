@@ -368,7 +368,8 @@ async function startChatBot(rwkvConfig) {
 	console.log("\x1b[32m--------------------------------------")
 	console.log(`Starting RWKV chat mode`)
 	console.log("--------------------------------------")
-	console.log(`Loading model from ${rwkvConfig.path} ...`)
+	// console.log(`Loading model from ${rwkvConfig.path} ...`)
+	console.log(`Loading model with ${JSON.stringify(rwkvConfig)} ...`)
 
 	const raven = new RWKV(rwkvConfig);
 	await raven.setup();
