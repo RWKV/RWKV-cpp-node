@@ -1,5 +1,28 @@
 #!/usr/bin/env node
 
+/**
+ * RWKV-cpp-node CLI example
+ * 
+ * The following CLI tooling was meant more of a simple fully working demo for RWKV model, as such it opts for simplicity over optimal setups.
+ * 
+ * Mostly in the following two ways
+ * - we use file sync operations for config file, if needed so we do not need to deal with async race conditions
+ * - we do a simple, DIY argument parser, to limit the amount of dependencies
+ * 
+ * If you wish to add even more features to this CLI tool, please consider creating a new project, with this as a dependency instead.
+ **/
+
+// ---------------------------
+// Check if node version is >= 18
+// ---------------------------
+
+const nodeVersion = process.versions.node;
+const nodeMajorVersion = Number(nodeVersion.split('.')[0]);
+if (nodeMajorVersion < 18) {
+	console.error(`Node version ${nodeVersion} is not supported. Please use node >= 18`);
+	process.exit(1);
+}
+
 // ---------------------------
 // Dependencies
 // ---------------------------
@@ -10,7 +33,6 @@ const path = require('path');
 const crypto = require('crypto');
 const ProgressBar = require('progress');
 const RWKV = require("./RWKV");
-
 const inquirerPromise = import('inquirer');
 const fetch = require('isomorphic-fetch');
 
@@ -25,18 +47,97 @@ const fetch = require('isomorphic-fetch');
 const RWKV_MODELS = require("./rwkv_models");
 const RWKV_CLI_DIR = path.join(os.homedir(), '.rwkv');
 const CONFIG_FILE = path.join(RWKV_CLI_DIR, 'config.json');
-const DOWNLOAD_CHUNK_SIZE = 1024;
 
-let threadCount = 6;
-let layers = 0;
+// ---------------------------
+// Config file handling
+// ---------------------------
+
+// local config object
+let _configObj = null;
+
+/**
+ * Load the config object from the config file
+ * if it is not yet loaded
+ * @returns {Object} config object
+ */
+function loadConfigObject() {
+	// Return cached config object
+	if( _configObj != null ) {
+		return _configObj;
+	}
+
+	// Fallback to blank, if no config file found
+	if (!fs.existsSync(CONFIG_FILE)) {
+		_configObj = {};
+		return _configObj;
+	}
+
+	// Load config file
+	const content = fs.readFileSync(CONFIG_FILE, { encoding: 'utf-8' });
+	if (!content) {
+		return null;
+	}
+	_configObj = Object.assign({}, JSON.parse(content));
+	return _configObj;
+}
+
+/**
+ * Save the config object to the config file
+ * Merges the values with the existing config file
+ * @param {Object} inConfigObj
+ **/
+function saveConfigObject(inConfigObj) {
+	if (!fs.existsSync(RWKV_CLI_DIR)) {
+		fs.mkdirSync(RWKV_CLI_DIR);
+	}
+	_configObj = Object.assign({}, loadConfigObject(), inConfigObj);
+	fs.writeFileSync(CONFIG_FILE, JSON.stringify(_configObj), {
+		encoding: 'utf-8',
+	});
+	return _configObj;
+}
 
 // ---------------------------
 // Model downloading
 // ---------------------------
 
+function saveConfigModelName(modelName) {
+	saveConfigObject({ model: modelName });
+}
+function loadConfigModelName() {
+	return loadConfigObject().model;
+}
+function getModelPath() {
+	return path.resolve(RWKV_CLI_DIR, loadConfigModelName());
+}
+
 /**
 * Prompt the user to select a model to download
 **/
+async function promptModelSelection() {
+	// [32m = green
+	console.log("\x1b[32m--------------------------------------")
+	console.log('RWKV Raven models will be downloaded into ~/.rwkv/');
+	console.log('Listed file sizes + 2 : is the approximate amount of RAM your system will need');
+	console.log("--------------------------------------\x1b[0m")
+	const choices = RWKV_MODELS.map((model) => ({
+		name: `${(model.size/1024/1024/1024).toFixed(2)} GB - ${model.label}`,
+		value: model,
+	}));
+	const { model } = await (await inquirerPromise).default.prompt({
+		type: 'list',
+		name: 'model',
+		message: 'Select a RWKV raven model to download: ',
+		choices,
+	});
+	return model;
+}
+
+/**
+* Given the model config object, download it. Does not check if there is an existing file
+* @param {Object} model 
+* @returns 
+*/
 async function downloadModelRaw(model) {
 	const destinationPath = path.join(RWKV_CLI_DIR, `${model.name}`);
 	console.log(`Downloading '${model.label}' - this will be saved to ${destinationPath}`);
@@ -168,27 +269,72 @@ async function downloadIfNotExists(model) {
 	return await downloadModelRaw(model);
 }
 
-function saveConfigModelName(modelName) {
-	if (!fs.existsSync(RWKV_CLI_DIR)) {
-		fs.mkdirSync(RWKV_CLI_DIR);
-	}
-	const config = {
-		model: modelName,
-	};
-	fs.writeFileSync(CONFIG_FILE, JSON.stringify(config), {
-		encoding: 'utf-8',
+// ---------------------------
+// Other config setup
+// ---------------------------
+
+/**
+* Prompt the user to select a model to download
+**/
+async function promptThreadCount() {
+	// Get the vCPU count
+	const vCPUCount = os.cpus().length;
+
+	// [32m = green
+	console.log("\x1b[32m--------------------------------------")
+	console.log('For most systems, the optimal number of threads = 4');
+	console.log('This is due to RAM speed limitations, where more threads may even hurt performance.');
+	console.log('(try different settings, and see what works best for you)');
+	console.log("--------------------------------------\x1b[0m")
+
+	const { threads } = await (await inquirerPromise).default.prompt({
+		type: 'number',
+		name: 'threads',
+		message: 'How many CPU threads should be used to run the model?',
+		default: Math.min(loadConfigObject().threads || 4, vCPUCount),
 	});
+
+	// Save the value
+	saveConfigObject({ threads: Math.max(threads,1) });
+	return threads;
 }
 
-function loadConfigModelName() {
-	if (!fs.existsSync(CONFIG_FILE)) {
-		return null;
-	}
-	const content = fs.readFileSync(CONFIG_FILE, { encoding: 'utf-8' });
-	if (!content) {
-		return null;
-	}
-	return JSON.parse(content)?.model;
+/**
+* Prompt the user to select a model to download
+**/
+async function promptGpuOffload() {
+	// Get current model path
+	const modelPath = getModelPath();
+
+	// Get the model file size
+	const modelSize = fs.statSync(modelPath).size;
+	const modelSize_gb = (modelSize/ 1024 / 1024 / 1024).toFixed(2)
+
+	// [32m = green
+	console.log("\x1b[32m--------------------------------------")
+	console.log('[Experimental] Offload a part of the model computation to the GPU');
+	console.log("This can be configured either in percentage (eg. 50%), or number of layers (eg. 12)");
+	console.log("");
+	console.log("You will approximately need the % configured, of your model disk size + 4GB of VRAM to run the model");
+	console.log("(For example: a 50% of a 24GB model, will require 12GB + 4GB of VRAM to run)");
+	console.log("");
+	console.log(`You current model size is ${modelSize_gb} GB in size, and will require the following estimated vRAM for ...`);
+	console.log("   25% offload: " + (modelSize_gb * 0.25 + 4).toFixed(2) + " GB");
+	console.log("   50% offload: " + (modelSize_gb * 0.5 + 4).toFixed(2) + " GB");
+	console.log("  100% offload: " + (modelSize_gb * 1.0 + 4).toFixed(2) + " GB");
+	console.log("--------------------------------------\x1b[0m")
+
+	const { gpu } = await (await inquirerPromise).default.prompt({
+		type: 'number',
+		name: 'gpu',
+		message: 'How many % of the model layers to do gpu offloading?',
+		default: parseInt(loadConfigObject().gpuOffload) || 0,
+	});
+	let gpuOffload =  Math.max(gpu,0)+"%"
+
+	// Save the value
+	saveConfigObject({ gpuOffload:gpuOffload });
+	return gpuOffload;
 }
 
 /**
@@ -200,114 +346,114 @@ async function performSetup() {
 
 	// Download the model (if needed)
 	await downloadIfNotExists(model);
+	await saveConfigModelName(model.name);
 
-	// Save the config
-	saveConfigModelName(model.name);
+	// Configure the remaining settings
+	let threads = await promptThreadCount();
+	let gpu = await promptGpuOffload();
+
+	console.log("\x1b[32m--------------------------------------")
+	console.log(`Final configured settings:`)
+	console.log(`  Model Path:  ${getModelPath()}`);
+	console.log(`  Threads:     ${threads}`);
+	console.log(`  GPU Offload: ${gpu}`);
+	console.log("--------------------------------------\x1b[0m")
 }
 
 // ---------------------------
 // Model Execution
 // ---------------------------
 
-async function startChatBot(modelPath) {
+async function startChatBot(rwkvConfig) {
+	
+	// Load the chatbot
+	console.log("\x1b[32m--------------------------------------")
+	console.log(`Starting RWKV chat mode`)
+	console.log("--------------------------------------")
+	console.log(`Loading model from ${rwkvConfig.path} ...`)
 
-    // Load the chatbot
-    console.log(`--------------------------------------`)
-    console.log(`Starting RWKV chat mode`)
-    console.log(`--------------------------------------`)
-    console.log(`Loading model from ${modelPath} ...`)
+	const raven = new RWKV(rwkvConfig);
+	await raven.setup();
 
-    const raven = new RWKV(modelPath, threadCount, layers);
+	// User / bot label name
+	const user = "User";
+	const bot = "Bot";
+	const interface = ":";
 
-    // User / bot label name
-    const user = "Bob";
-    const bot = "Alice";
-    const interface = ":";
+	// The chat bot prompt to use
+	const prompt = [
+		"",
+		`The following is a verbose detailed conversation between ${user} and a young women ${bot}. ${bot} is intelligent, friendly and cute. ${bot} is unlikely to disagree with ${user}.`,
+		"",
+		`${user}${interface} Hello ${bot}, how are you doing?`,
+		"",
+		`${bot}${interface} Hi ${user}! Thanks, I'm fine. What about you?`,
+		"",
+		`${user}${interface} I am very good! It's nice to see you. Would you mind me chatting with you for a while?`,
+		"",
+		`${bot}${interface} Not at all! I'm listening.`,
+		"",
+		""
+	].join("\n");
 
-    // The chat bot prompt to use
-    const prompt = [
-        "",
-        `The following is a verbose detailed conversation between ${user} and a young women ${bot}. ${bot} is intelligent, friendly and cute. ${bot} is unlikely to disagree with ${user}.`,
-        "",
-        `${user}${interface} Hello ${bot}, how are you doing?`,
-        "",
-        `${bot}${interface} Hi ${user}! Thanks, I'm fine. What about you?`,
-        "",
-        `${user}${interface} I am very good! It's nice to see you. Would you mind me chatting with you for a while?`,
-        "",
-        `${bot}${interface} Not at all! I'm listening.`,
-        "",
-        ""
+	// Preload the prompt, this helps make the first response faster
+	let firstLoadPromise = raven.preloadPrompt(prompt);
 
-    ].join("\n");
+	// Log the start of the conversation
+	console.log(`The following is a conversation between the ${user} and the ${bot} ...`)
+	console.log("--------------------------------------\x1b[0m")
 
-    // Define a helper function to preload the prompt
-    function preloadPrompt() {
-        // Preload the prompt
-        raven.preloadPrompt(prompt);
+	// The chat history
+	let chatHistory = prompt;
 
-        // Log the start of the conversation
-        console.log(`The following is a conversation between ${user} the user and ${bot} the chatbot.`)
-        console.log(`--------------------------------------`)
-    }
+	// Lets start the loop
+	while(true) {
+		// Get the user input
+		let res = await (await inquirerPromise).default.prompt([{
+			type: 'input',
+			name: 'userInput',
+			message: `${user}${interface} `,
+			validate: (value) => {
+				return (value||"").trim().length > 0;
+			}
+		}]);
 
-    // Wait for the instance to be fully initialized
-    await new Promise((resolve) => {
-        raven.on("initialized", resolve);
-    });
+		// Ensure first load finished
+		await firstLoadPromise;
 
-    // Call the preloadPrompt function to load the prompt after initialization
-    preloadPrompt();
+		// Add the user input to the chat history
+		chatHistory += `${user}${interface} ${res.userInput}\n\n${bot}:`;
 
-    // The chat history
-    let chatHistory = prompt;
-
-    // Lets start the loop
-    while(true) {
-        // Get the user input
-        let res = await (await inquirerPromise).default.prompt([{
-            type: 'input',
-            name: 'userInput',
-            message: `${user}${interface} `,
-            validate: (value) => {
-                return (value||"").trim().length > 0;
-            }
-        }]);
-
-        // Add the user input to the chat history
-        chatHistory += `${user}${interface} ${res.userInput}\n\n${bot}:`;
-
-        // Run the completion
-        process.stdout.write(`${bot}: `);
-        res = raven.completion({
-            prompt: chatHistory,
-            max_tokens: 200,
-            streamCallback: (text) => {
-                process.stdout.write(text);
-            },
-            stop: ["\nBob:", "\nbob:"]
-        });
-        // console.log(res);
-        chatHistory += `${res.completion.trim()}\n\n`;
-    }
+		// Run the completion
+		process.stdout.write(`${bot}: `);
+		res = await raven.completion({
+			prompt: chatHistory,
+			max_tokens: 2000,
+			streamCallback: (text) => {
+				process.stdout.write(text);
+			},
+			stop: [`\n${bot}:`, `\n${user}:`]
+		});
+		// console.log(res);
+		chatHistory += `${res.completion.trim()}\n\n`;
+	}
 }
 
-
-async function runDragonPrompt(modelPath) {
+async function runDragonPrompt(rwkvConfig, size=100) {
 	// Load the chatbot
-	console.log(`Loading model from ${modelPath} ...`)
-	console.log(`--------------------------------------`)
-	const raven = new RWKV(modelPath, threadCount, layers);
+	console.log(`\x1b[32mLoading model with ${JSON.stringify(rwkvConfig)} ...`)
+	console.log("--------------------------------------\x1b[0m")
+	const raven = new RWKV(rwkvConfig);
+	await raven.setup();
 
 	// The demo prompt for RWKV
 	const dragonPrompt = '\nIn a shocking finding, scientist discovered a herd of dragons living in a remote, previously unexplored valley, in Tibet. Even more surprising to the researchers was the fact that the dragons spoke perfect Chinese.'
 	console.log(`Running the test dragon prompt: ${dragonPrompt}`);
-	raven.preloadPrompt(dragonPrompt);
 
 	// Does the actual demo execution
-	let res = raven.completion({
+	let res = await raven.completion({
 		prompt: dragonPrompt,
-		max_tokens: 1000,
+		max_tokens: size,
 		streamCallback: (text) => {
 			process.stdout.write(text);
 		}
@@ -315,21 +461,13 @@ async function runDragonPrompt(modelPath) {
 
 	// Log the stats
 	console.log("");
-	console.log(`--------------------------------------`)
+	console.log("\x1b[32m--------------------------------------\x1b[0m")
 	console.log(`\n\nRWKV perf stats: \n${JSON.stringify(res.perf)}`);
 }
 
 // ---------------------------
 // CLI handling
 // ---------------------------
-
-class rwkv_model {
-	constructor(modelpath, threadcount, layers) {
-	  this.modelpath = modelpath;
-	  this.threadcount = threadcount;
-	  this.layers = layers;
-	}
-  }
 
 // Run the CLI within an async function
 (async function() {
@@ -349,41 +487,6 @@ class rwkv_model {
 	// Check if first arg is --modelPath
 	if (args.indexOf('--modelPath') >=0) {
 		modelPath = args[1];
-	}
-
-	// check if args contains '--threadCount' and set threadcount to the next arg if not specified default to 6
-
-	if (args.indexOf('--threadcount') >= 0) {
-		let _threadCount = args[args.indexOf('--threadcount') + 1];
-		try {
-			threadCount = parseInt(_threadCount);
-			if (threadCount > 0) {
-				threadCount = _threadCount;
-			} else {			
-				throw new Error("Invalid threadCount value, should be positive, defaulting to 6");
-				threadCount = 6;
-			}
-		} catch (error) {
-			console.log("Invalid threadCount value, defaulting to 6");
-			threadCount = 6;
-		}
-	}
-	
-	// Check if '--layers' is specified and set vram to the next arg if not specified default to 0
-	if (args.indexOf('--layers') >= 0) {
-		layers = 0;
-
-		_layers = args[args.indexOf('--layers') + 1];
-		try {
-			layers = parseInt(_layers);
-		
-			if (isNaN(layers) || !isFinite(layers)) {		
-				throw new Error("Invalid layers value, " + layers +  " defaulting to 0");
-			}		
-		} catch (error) {
-			console.log("Invalid layers value, " + _layers + " defaulting to 0");	
-			layers = 0;
-		}
 	}
 
 	// If model path is not set, check if it is in the config
@@ -409,14 +512,68 @@ class rwkv_model {
 		modelPath = path.resolve(RWKV_CLI_DIR, model.name);
 	}
 
+	// check if args contains '--threads' and set threads to the next arg if not specified default to 6
+	let threads = loadConfigObject().threads || 4;
+	if (args.indexOf('--threads') >= 0) {
+		let _threads = args[args.indexOf('--threads') + 1];
+		try {
+			threads = parseInt(_threads);
+			if (threads > 0) {
+				threads = _threads;
+			} else {			
+				throw new Error("Invalid threads value, should be positive, defaulting to 6");
+				threads = 6;
+			}
+		} catch (error) {
+			console.log("Invalid threads value, defaulting to 6");
+			threads = 6;
+		}
+	}
+	
+	// Check if '--gpu' is specified and set vram to the next arg if not specified default to 0
+	let gpuOffload = loadConfigObject().gpuOffload || 0;
+	if (args.indexOf('--gpu') >= 0) {
+		let _gpuOffload = args[args.indexOf('--gpu') + 1];
+		try {
+			let _parsedGpuOffload = parseInt(_gpuOffload);
+			if (isNaN(_parsedGpuOffload) || !isFinite(_parsedGpuOffload)) {		
+				console.warn("Invalid gpu offload value, " + _gpuOffload +  " defaulting to "+gpuOffload);
+			}
+			gpuOffload = _gpuOffload;
+		} catch (error) {
+			console.warn("Invalid layers value, " + _gpuOffload + " defaulting to "+gpuOffload);	
+		}
+	}
+
+	// RWKV config
+	let rwkvConfig = {
+		path: modelPath,
+		threads: threads,
+		gpuOffload: gpuOffload
+	};
+
 	// Check if the --dragon test prompt is running
 	if(args[0] === '--dragon' || args[1] === '--dragon' || args[2] === '--dragon') {
-		await runDragonPrompt(modelPath);
+		let size = 1000;
+		if (args.indexOf('--size') >= 0) {
+			let _size = args[args.indexOf('--size') + 1];
+			try {
+				size = parseInt(_size);
+				if (size > 0) {
+					size = _size;
+				} else {
+					console.warn("Invalid test size value, should be positive, defaulting to 1000");
+					size = 100;
+				}
+			} catch (error) {
+				console.warn("Invalid test size value, defaulting to 1000");
+				size = 100;
+			}
+		}
+		await runDragonPrompt(rwkvConfig, size);
 		return;
 	}
-	modelArgs = new rwkv_model(modelPath, parseInt(threadCount), layers);
-//todo: find why i need to parse int here again.
 
 	// Call the main start chat bot instead
-	await startChatBot(modelPath);
+	await startChatBot(rwkvConfig);
 })()

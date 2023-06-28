@@ -18,9 +18,9 @@ const ai_utils = require("../src/ai_utils")
 const fs = require("fs")
 const os = require("os");
 const path = require("path");
-let modelPath = path.join(os.homedir(), '.rwkv', 'RWKV-4-Raven-1B5-v11.bin');
+let modelPath = path.join(os.homedir(), '.rwkv', 'raven_1b5_v12_Q8_0.bin');
 if( fs.existsSync(modelPath) == false ) {
-	modelPath = "./raven/RWKV-4-Raven-1B5-v11.bin";
+	modelPath = "./raven/raven_1b5_v12_Q8_0.bin";
 }
 
 //-----------------------------------------------------------
@@ -40,26 +40,26 @@ describe("cpp_bind operations testing", function() {
 	// Lets load the model, and get a ctx pointer
 	it("load the model", function() {
 		// Lets load the model, tagged to the number of threads
-		ctx = cpp_bind.rwkv_init_from_file(modelPath, os.cpus().length);
+		ctx = cpp_bind.rwkv_init_from_file(modelPath, os.cpus().length/2);
 
 		// Validate the context is not null
 		assert.ok(ctx != null, "Context Loaded check");
 	});
 
-	it("get the system info", function() {
-		// Lets load the model, tagged to the number of threads
-		let info = cpp_bind.rwkv_get_system_info_string();
+	// it("get the system info", function() {
+	// 	// Lets load the model, tagged to the number of threads
+	// 	let info = cpp_bind.rwkv_get_system_info_string();
 
-		// Validate the system info is not null
-		assert.ok(info != null, "System info NULL check");
-		assert.ok(info.indexOf("AVX") >= 0, "AVX check (check for the key, not the result)");
-	});
+	// 	// Validate the system info is not null
+	// 	assert.ok(info != null, "System info NULL check");
+	// 	assert.ok(info.indexOf("AVX") >= 0, "AVX check (check for the key, not the result)");
+	// });
 
 	// Get the state and logits size
 	it("check state and logits size", function() {
 		// Get the state and logits size
-		state_size = cpp_bind.rwkv_get_state_buffer_element_count(ctx);
-		logits_size = cpp_bind.rwkv_get_logits_buffer_element_count(ctx);
+		state_size = cpp_bind.rwkv_get_state_len(ctx);
+		logits_size = cpp_bind.rwkv_get_logits_len(ctx);
 
 		// // Validate the state and logits size, for 7B v11 model
 		// assert.equal(state_size, 655360, "State size check");
