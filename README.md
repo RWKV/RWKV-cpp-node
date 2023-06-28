@@ -12,7 +12,7 @@ rwkv-cpp-node
 ```
 
 > This is not a pure JS solution, and depends on the [precompiled RWKV.cpp binaries found here](https://github.com/saharNooby/rwkv.cpp)
-
+>
 > This currently runs purely on your CPU, while that means you can use nearly anything to run it, you also do not get any insane speed up with a GPU (yet)
 
 # What is RWKV?
@@ -71,12 +71,12 @@ Which would start an interactive shell session, with something like the followin
 Starting RWKV chat mode
 --------------------------------------
 Loading model from /root/.rwkv/raven_1b5_v11.bin ...
-The following is a conversation between Bob the user and Alice the chatbot.
+The following is a conversation between the user and bot
 --------------------------------------
-? Bob:  Hi
-Alice:  How can I help you?
-? Bob:  Tell me something interesting about ravens
-Alice:  RAVEN. I am most fascinated by the raven because of its incredible rate of survival. Ravens have been observed to live longer than any other bird, rumored to reach over 200 years old. They have the ability to live for over 1,000 years, a remarkable feat. This makes them the odd man out among birds!
+? User: Hi
+Bot:    How can I help you?
+? User: Tell me something interesting about ravens
+Bot:    RAVEN. I am most fascinated by the raven because of its incredible rate of survival. Ravens have been observed to live longer than any other bird, rumored to reach over 200 years old. They have the ability to live for over 1,000 years, a remarkable feat. This makes them the odd man out among birds!
 ```
 
 > PS: RWKV like all chat models, can and do lie about stuff.
@@ -101,11 +101,7 @@ npm i rwkv-cpp-node
 ```
 
 Download one of the prequantized rwkv.cpp weights, from hugging face (raven, is RWKV pretrained weights with fine-tuned instruction sets)
-
-- [RWKV raven 1B5 v11 (Small, Fast)](https://huggingface.co/datasets/picocreator/rwkv-4-cpp-quantize-bin/resolve/main/RWKV-4-Raven-1B5-v11.bin)
-- [RWKV raven 7B v11 (Q8_0)](https://huggingface.co/BlinkDL/rwkv-4-raven/resolve/main/Q8_0-RWKV-4-Raven-7B-v11x-Eng99%25-Other1%25-20230429-ctx8192.bin)
-- [RWKV raven 7B v11 (Q8_0, multilingual, performs worse in english)](https://huggingface.co/BlinkDL/rwkv-4-raven/resolve/main/Q8_0-RWKV-4-Raven-7B-v11-Eng49%25-Chn49%25-Jpn1%25-Other1%25-20230430-ctx8192.bin)
-- [RWKV raven 14B v11 (Q8_0)](https://huggingface.co/BlinkDL/rwkv-4-raven/resolve/main/Q8_0-RWKV-4-Raven-14B-v11x-Eng99%25-Other1%25-20230501-ctx8192.bin)
+- [RWKV-4-rave-ggml-quantized](https://huggingface.co/latestissue/rwkv-4-raven-ggml-quantized/)
 
 Alternatively you can download one of the [raven pretrained weights from the hugging face repo](https://huggingface.co/BlinkDL/rwkv-4-raven/tree/main). 
 And perform your own quantization conversion using the [original rwkv.cpp project](https://github.com/saharNooby/rwkv.cpp)
@@ -117,9 +113,10 @@ const RWKV = require("RWKV-cpp-node");
 
 // Load the module with the pre-qunatized cpp weights
 const raven = new RWKV("<path-to-your-model-bin-files>")
+await raven.setup();
 
 // Call the completion API
-let res = raven.completion("RWKV is a")
+let res = await raven.completion("RWKV is a")
 
 // And log, or do something with the result
 console.log( res.completion )
@@ -256,21 +253,6 @@ let resFormat = {
 npm run test
 ```
 
-# Clarification notes
-
-**Why didn't you cache the entire prompt?**
-
-I intentionally did not cache the last 2 tokens, to avoid sub-optimal performance when the prompt strings, should have been merged as a single token, which would have impacted the quality of result.
-
-For example "Hello" represents a single token of 12092
-
-However if I cached every prompt blindly in full, if you performed multiple calls, character by character. Each subsequent call would continue from the previous cached result in its "incomplet form".
-
-As a result when you finally call "Hello", it can end up consisting of 5 tokens, with 1 character each. (aka ["H","e","l","l","o"])
-This leads to extreamly unexpected behaviour in the quality of the model output.
-
-While the example is an extreame case, there are smaller scale off-by-1 example regarding whitespace.
-
 # Designated maintainer
 
 [@picocreator](https://github.com/PicoCreator) - is the current maintainer of the project, ping him on the RWKV discord if you have any questions on this project
@@ -285,7 +267,7 @@ While the example is an extreame case, there are smaller scale off-by-1 example 
 
 - https://github.com/BlinkDL/RWKV-LM
 
-# Time taken per token completion
+# [ THIS IS OUTDATED ] Time taken per token completion for RWKV.cpp v1
 
 | Model Size | Download Size | RAM usage | AWS c6g.4xlarge (arm64, 8 Core, 16 vCPU) | AWS c6gd.16xlarge (arm64, 32 Core, 64 vCPU) | M2 Pro, Mac Mini  (6 P core + 4 E core) | Oracle A1 (4 Cores) | AMD Ryzen 7 3700X (x64, 8 Core, 16 vCPU) |
 |------------|---------------|-----------|------------------------------------------|---------------------------------------------|-----------------------------------------|---------------------|------------------------------------------|
