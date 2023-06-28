@@ -12,6 +12,8 @@ const ProgressBar = require('progress');
 const RWKV = require("./RWKV");
 
 const inquirerPromise = import('inquirer');
+const fetch = require('isomorphic-fetch');
+
 
 // ---------------------------
 // Configs and paths
@@ -25,6 +27,9 @@ const RWKV_CLI_DIR = path.join(os.homedir(), '.rwkv');
 const CONFIG_FILE = path.join(RWKV_CLI_DIR, 'config.json');
 const DOWNLOAD_CHUNK_SIZE = 1024;
 
+let threadCount = 6;
+let layers = 0;
+
 // ---------------------------
 // Model downloading
 // ---------------------------
@@ -32,103 +37,54 @@ const DOWNLOAD_CHUNK_SIZE = 1024;
 /**
 * Prompt the user to select a model to download
 **/
-async function promptModelSelection() {
-	console.log(`--------------------------------------`)
-	console.log('RWKV Raven models will be downloaded into ~/.rwkv/');
-	console.log('Listed file sizes + 2 : is the approximate amount of RAM your system will need');
-	console.log(`--------------------------------------`)
-	const choices = RWKV_MODELS.map((model) => ({
-		name: `${(model.size/1024/1024/1024).toFixed(2)} GB - ${model.label}`,
-		value: model,
-	}));
-	const { model } = await (await inquirerPromise).default.prompt({
-		type: 'list',
-		name: 'model',
-		message: 'Select a RWKV raven model to download: ',
-		choices,
-	});
-	return model;
-}
-
-/**
-* Given the model config object, download it. Does not check if there is an existing file
-* @param {Object} model 
-* @returns 
-*/
 async function downloadModelRaw(model) {
 	const destinationPath = path.join(RWKV_CLI_DIR, `${model.name}`);
 	console.log(`Downloading '${model.label}' - this will be saved to ${destinationPath}`);
-	
+  
 	const response = await fetch(model.url);
 	if (!response.ok) {
-		throw new Error(`Failed to download ${model.label} model: ${response.statusText}`);
+	  throw new Error(`Failed to download ${model.label} model: ${response.statusText}`);
 	}
 	const fileSize = Number(response.headers.get('content-length'));
-
+  
 	// Incremental downloaded size and speed
 	let downloadedSize = 0;
 	let downloadedSize_gb = 0;
 	let speed = 0;
-
+  
 	const progressBar = new ProgressBar('[:bar] :percent :etas - :downloadedSize_gb GB - :speed MB/s', {
-		complete: '=',
-		incomplete: '-',
-		width: 20,
-		total: fileSize,
+	  complete: '=',
+	  incomplete: '-',
+	  width: 20,
+	  total: fileSize,
 	});
 	const outputStream = fs.createWriteStream(destinationPath);
-	const reader = response.body.getReader();
-
-	async function processData() {
-		const startTime = Date.now();
-		while (true) {
-			const { done, value } = await reader.read();
-
-			// Check for completion, if so terminate the loop
-			if (done) {
-				progressBar.terminate();
-				console.log(`Model ${model.name} downloaded to ${destinationPath}`);
-				outputStream.end();
-				reader.releaseLock();
-				break;
-			}
-
-			// Calculate size and speed
-			downloadedSize += value.length;
-			downloadedSize_gb = (downloadedSize / 1024 / 1024 / 1024).toFixed(2);
-			const timeTaken = (Date.now() - startTime) / 1000;
-			speed = (downloadedSize / 1024 / 1024 / timeTaken).toFixed(2);
-
-			progressBar.tick(value.length, {
-				speed: speed,
-				downloadedSize_gb: downloadedSize_gb,
-			});
-				
-			// Await for outputStream.write to complete
-			await new Promise((resolve, reject) => {
-				outputStream.write(value, (err) => {
-					if (err) {
-						reject(err);
-						return;
-					}
-					resolve();
-				});
-			});
-		}
-	}
-	await processData();
-
-	// Validate the model
-	console.log(`Validating downloaded model ...`)
-	if( (await validateModel(model)) == false ) {
-		console.log(`Model validation failed, run the --setup command again (mismatched size/sha256)`)
-		process.exit(1);
-	} else {
-		console.log(`Model validation passed!`)
-	}
-	return destinationPath;
-}
-
+  
+	return new Promise((resolve, reject) => {
+	  response.body
+		.pipe(outputStream)
+		.on('error', reject)
+		.on('data', (chunk) => {
+		  // Calculate size and speed
+		  downloadedSize += chunk.length;
+		  downloadedSize_gb = (downloadedSize / 1024 / 1024 / 1024).toFixed(2);
+		  const timeTaken = (Date.now() - startTime) / 1000;
+		  speed = (downloadedSize / 1024 / 1024 / timeTaken).toFixed(2);
+  
+		  progressBar.tick(chunk.length, {
+			speed: speed,
+			downloadedSize_gb: downloadedSize_gb,
+		  });
+		})
+		.on('end', () => {
+		  progressBar.terminate();
+		  console.log(`Model ${model.name} downloaded to ${destinationPath}`);
+		  outputStream.end();
+		  resolve(destinationPath);
+		});
+	});
+  }
+  
 /**
 * Given a file path, compute the sha256 hash of the file
 * @param {String} filePath 
@@ -254,81 +210,94 @@ async function performSetup() {
 // ---------------------------
 
 async function startChatBot(modelPath) {
-	
-	// Load the chatbot
-	console.log(`--------------------------------------`)
-	console.log(`Starting RWKV chat mode`)
-	console.log(`--------------------------------------`)
-	console.log(`Loading model from ${modelPath} ...`)
 
-	const raven = new RWKV(modelPath);
+    // Load the chatbot
+    console.log(`--------------------------------------`)
+    console.log(`Starting RWKV chat mode`)
+    console.log(`--------------------------------------`)
+    console.log(`Loading model from ${modelPath} ...`)
 
-	// User / bot label name
-	const user = "Bob";
-	const bot = "Alice";
-	const interface = ":";
+    const raven = new RWKV(modelPath, threadCount, layers);
 
-	// The chat bot prompt to use
-	const prompt = [
-		"",
-		`The following is a verbose detailed conversation between ${user} and a young girl ${bot}. ${bot} is intelligent, friendly and cute. ${bot} is unlikely to disagree with ${user}.`,
-		"",
-		`${user}${interface} Hello ${bot}, how are you doing?`,
-		"",
-		`${bot}${interface} Hi ${user}! Thanks, I'm fine. What about you?`,
-		"",
-		`${user}${interface} I am very good! It's nice to see you. Would you mind me chatting with you for a while?`,
-		"",
-		`${bot}${interface} Not at all! I'm listening.`,
-		"",
-		""
-	].join("\n");
+    // User / bot label name
+    const user = "Bob";
+    const bot = "Alice";
+    const interface = ":";
 
-	// Preload the prompt
-	raven.preloadPrompt(prompt);
+    // The chat bot prompt to use
+    const prompt = [
+        "",
+        `The following is a verbose detailed conversation between ${user} and a young women ${bot}. ${bot} is intelligent, friendly and cute. ${bot} is unlikely to disagree with ${user}.`,
+        "",
+        `${user}${interface} Hello ${bot}, how are you doing?`,
+        "",
+        `${bot}${interface} Hi ${user}! Thanks, I'm fine. What about you?`,
+        "",
+        `${user}${interface} I am very good! It's nice to see you. Would you mind me chatting with you for a while?`,
+        "",
+        `${bot}${interface} Not at all! I'm listening.`,
+        "",
+        ""
 
-	// Log the start of the conversation
-	console.log(`The following is a conversation between ${user} the user and ${bot} the chatbot.`)
-	console.log(`--------------------------------------`)
+    ].join("\n");
 
-	// The chat history
-	let chatHistory = prompt;
+    // Define a helper function to preload the prompt
+    function preloadPrompt() {
+        // Preload the prompt
+        raven.preloadPrompt(prompt);
 
-	// Lets start the loop
-	while(true) {
-		// Get the user input
-		let res = await (await inquirerPromise).default.prompt([{
-			type: 'input',
-			name: 'userInput',
-			message: `${user}${interface} `,
-			validate: (value) => {
-				return (value||"").trim().length > 0;
-			}
-		}]);
+        // Log the start of the conversation
+        console.log(`The following is a conversation between ${user} the user and ${bot} the chatbot.`)
+        console.log(`--------------------------------------`)
+    }
 
-		// Add the user input to the chat history
-		chatHistory += `${user}${interface} ${res.userInput}\n\n${bot}:`;
+    // Wait for the instance to be fully initialized
+    await new Promise((resolve) => {
+        raven.on("initialized", resolve);
+    });
 
-		// Run the completion
-		process.stdout.write(`${bot}: `);
-		res = raven.completion({
-			prompt: chatHistory,
-			max_tokens: 200,
-			streamCallback: (text) => {
-				process.stdout.write(text);
-			},
-			stop: ["\nBob:", "\nbob:"]
-		});
-		// console.log(res);
-		chatHistory += `${res.completion.trim()}\n\n`;
-	}
+    // Call the preloadPrompt function to load the prompt after initialization
+    preloadPrompt();
+
+    // The chat history
+    let chatHistory = prompt;
+
+    // Lets start the loop
+    while(true) {
+        // Get the user input
+        let res = await (await inquirerPromise).default.prompt([{
+            type: 'input',
+            name: 'userInput',
+            message: `${user}${interface} `,
+            validate: (value) => {
+                return (value||"").trim().length > 0;
+            }
+        }]);
+
+        // Add the user input to the chat history
+        chatHistory += `${user}${interface} ${res.userInput}\n\n${bot}:`;
+
+        // Run the completion
+        process.stdout.write(`${bot}: `);
+        res = raven.completion({
+            prompt: chatHistory,
+            max_tokens: 200,
+            streamCallback: (text) => {
+                process.stdout.write(text);
+            },
+            stop: ["\nBob:", "\nbob:"]
+        });
+        // console.log(res);
+        chatHistory += `${res.completion.trim()}\n\n`;
+    }
 }
+
 
 async function runDragonPrompt(modelPath) {
 	// Load the chatbot
 	console.log(`Loading model from ${modelPath} ...`)
 	console.log(`--------------------------------------`)
-	const raven = new RWKV(modelPath);
+	const raven = new RWKV(modelPath, threadCount, layers);
 
 	// The demo prompt for RWKV
 	const dragonPrompt = '\nIn a shocking finding, scientist discovered a herd of dragons living in a remote, previously unexplored valley, in Tibet. Even more surprising to the researchers was the fact that the dragons spoke perfect Chinese.'
@@ -354,6 +323,14 @@ async function runDragonPrompt(modelPath) {
 // CLI handling
 // ---------------------------
 
+class rwkv_model {
+	constructor(modelpath, threadcount, layers) {
+	  this.modelpath = modelpath;
+	  this.threadcount = threadcount;
+	  this.layers = layers;
+	}
+  }
+
 // Run the CLI within an async function
 (async function() {
 	// Get the current CLI arguments
@@ -370,8 +347,43 @@ async function runDragonPrompt(modelPath) {
 	let modelPath = null;
 
 	// Check if first arg is --modelPath
-	if (args[0] === '--modelPath') {
+	if (args.indexOf('--modelPath') >=0) {
 		modelPath = args[1];
+	}
+
+	// check if args contains '--threadCount' and set threadcount to the next arg if not specified default to 6
+
+	if (args.indexOf('--threadcount') >= 0) {
+		let _threadCount = args[args.indexOf('--threadcount') + 1];
+		try {
+			threadCount = parseInt(_threadCount);
+			if (threadCount > 0) {
+				threadCount = _threadCount;
+			} else {			
+				throw new Error("Invalid threadCount value, should be positive, defaulting to 6");
+				threadCount = 6;
+			}
+		} catch (error) {
+			console.log("Invalid threadCount value, defaulting to 6");
+			threadCount = 6;
+		}
+	}
+	
+	// Check if '--layers' is specified and set vram to the next arg if not specified default to 0
+	if (args.indexOf('--layers') >= 0) {
+		layers = 0;
+
+		_layers = args[args.indexOf('--layers') + 1];
+		try {
+			layers = parseInt(_layers);
+		
+			if (isNaN(layers) || !isFinite(layers)) {		
+				throw new Error("Invalid layers value, " + layers +  " defaulting to 0");
+			}		
+		} catch (error) {
+			console.log("Invalid layers value, " + _layers + " defaulting to 0");	
+			layers = 0;
+		}
 	}
 
 	// If model path is not set, check if it is in the config
@@ -402,6 +414,8 @@ async function runDragonPrompt(modelPath) {
 		await runDragonPrompt(modelPath);
 		return;
 	}
+	modelArgs = new rwkv_model(modelPath, parseInt(threadCount), layers);
+//todo: find why i need to parse int here again.
 
 	// Call the main start chat bot instead
 	await startChatBot(modelPath);
