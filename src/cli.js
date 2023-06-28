@@ -34,6 +34,8 @@ const crypto = require('crypto');
 const ProgressBar = require('progress');
 const RWKV = require("./RWKV");
 const inquirerPromise = import('inquirer');
+const fetch = require('isomorphic-fetch');
+
 
 // ---------------------------
 // Configs and paths
@@ -139,77 +141,51 @@ async function promptModelSelection() {
 async function downloadModelRaw(model) {
 	const destinationPath = path.join(RWKV_CLI_DIR, `${model.name}`);
 	console.log(`Downloading '${model.label}' - this will be saved to ${destinationPath}`);
-	
+  
 	const response = await fetch(model.url);
 	if (!response.ok) {
-		throw new Error(`Failed to download ${model.label} model: ${response.statusText}`);
+	  throw new Error(`Failed to download ${model.label} model: ${response.statusText}`);
 	}
 	const fileSize = Number(response.headers.get('content-length'));
-
+  
 	// Incremental downloaded size and speed
 	let downloadedSize = 0;
 	let downloadedSize_gb = 0;
 	let speed = 0;
-
+  
 	const progressBar = new ProgressBar('[:bar] :percent :etas - :downloadedSize_gb GB - :speed MB/s', {
-		complete: '=',
-		incomplete: '-',
-		width: 20,
-		total: fileSize,
+	  complete: '=',
+	  incomplete: '-',
+	  width: 20,
+	  total: fileSize,
 	});
 	const outputStream = fs.createWriteStream(destinationPath);
-	const reader = response.body.getReader();
-
-	async function processData() {
-		const startTime = Date.now();
-		while (true) {
-			const { done, value } = await reader.read();
-
-			// Check for completion, if so terminate the loop
-			if (done) {
-				progressBar.terminate();
-				console.log(`Model ${model.name} downloaded to ${destinationPath}`);
-				outputStream.end();
-				reader.releaseLock();
-				break;
-			}
-
-			// Calculate size and speed
-			downloadedSize += value.length;
-			downloadedSize_gb = (downloadedSize / 1024 / 1024 / 1024).toFixed(2);
-			const timeTaken = (Date.now() - startTime) / 1000;
-			speed = (downloadedSize / 1024 / 1024 / timeTaken).toFixed(2);
-
-			progressBar.tick(value.length, {
-				speed: speed,
-				downloadedSize_gb: downloadedSize_gb,
-			});
-				
-			// Await for outputStream.write to complete
-			await new Promise((resolve, reject) => {
-				outputStream.write(value, (err) => {
-					if (err) {
-						reject(err);
-						return;
-					}
-					resolve();
-				});
-			});
-		}
-	}
-	await processData();
-
-	// Validate the model
-	console.log(`Validating downloaded model ...`)
-	if( (await validateModel(model)) == false ) {
-		console.log(`Model validation failed, run the --setup command again (mismatched size/sha256)`)
-		process.exit(1);
-	} else {
-		console.log(`Model validation passed!`)
-	}
-	return destinationPath;
-}
-
+  
+	return new Promise((resolve, reject) => {
+	  response.body
+		.pipe(outputStream)
+		.on('error', reject)
+		.on('data', (chunk) => {
+		  // Calculate size and speed
+		  downloadedSize += chunk.length;
+		  downloadedSize_gb = (downloadedSize / 1024 / 1024 / 1024).toFixed(2);
+		  const timeTaken = (Date.now() - startTime) / 1000;
+		  speed = (downloadedSize / 1024 / 1024 / timeTaken).toFixed(2);
+  
+		  progressBar.tick(chunk.length, {
+			speed: speed,
+			downloadedSize_gb: downloadedSize_gb,
+		  });
+		})
+		.on('end', () => {
+		  progressBar.terminate();
+		  console.log(`Model ${model.name} downloaded to ${destinationPath}`);
+		  outputStream.end();
+		  resolve(destinationPath);
+		});
+	});
+  }
+  
 /**
 * Given a file path, compute the sha256 hash of the file
 * @param {String} filePath 

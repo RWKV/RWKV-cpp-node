@@ -22,6 +22,7 @@
 		"inquirer": "^9.2.1",
 		"koffi": "^2.5.0",
 		"lru-cache": "^7.18.1",
+		"node-fetch": "^3.3.1",
 		"progress": "^2.0.3",
 		"promise-queue": "^2.2.5",
 		"rwkv-tokenizer-node": "^1.0.3"
