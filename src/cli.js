@@ -34,8 +34,6 @@ const crypto = require('crypto');
 const ProgressBar = require('progress');
 const RWKV = require("./RWKV");
 const inquirerPromise = import('inquirer');
-const fetch = require('isomorphic-fetch');
-
 
 // ---------------------------
 // Configs and paths
