@@ -1,6 +1,6 @@
 {
 	"name": "rwkv-cpp-node",
-	"version": "1.1.26",
+	"version": "2.0.1",
 	"description": "RWKV.cpp bindings for node.js - includes CLI tooling to quickly download and run your RWKV raven models",
 	"main": "src/RWKV.js",
 	"scripts": {
@@ -20,9 +20,11 @@
 	"license": "MIT",
 	"dependencies": {
 		"inquirer": "^9.2.1",
-		"koffi": "^2.3.19",
+		"koffi": "^2.5.0",
 		"lru-cache": "^7.18.1",
+		"node-fetch": "^3.3.1",
 		"progress": "^2.0.3",
+		"promise-queue": "^2.2.5",
 		"rwkv-tokenizer-node": "^1.0.3"
 	},
 	"optionalDependencies": {
