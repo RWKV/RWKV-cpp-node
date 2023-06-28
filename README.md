@@ -1,6 +1,9 @@
 # RWKV.cpp NodeJS bindings
 
-Arguably the easiest way to get RWKV.cpp running on node.js. 
+Arguably the easiest way to get RWKV.cpp running on node.js
+
+This project exists both as a CLI tool
+And as a usable nodejs library
 
 **World model is not yet supported**
 
