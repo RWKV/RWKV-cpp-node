@@ -9,8 +9,6 @@ The CLI tooling, is simply a helper tooling, to do quick demo's or benchmark via
 
 > This is not a pure JS solution, and depends on the [precompiled RWKV.cpp binaries found here](https://github.com/saharNooby/rwkv.cpp)
 >
-> This currently runs purely on your CPU, while that means you can use nearly anything to run it, you also do not get any insane speed up with a GPU (yet)
->
 > Additionally V2 breaks compatiblity with V1, due to changes in quantization weights.
 
 ## Running it as a JS lib
