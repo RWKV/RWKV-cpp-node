@@ -2,11 +2,29 @@
 
 Arguably the easiest way to get RWKV.cpp running on node.js
 
-This project pirmary use case, is to be used as a nodejs library for running RWKV.cpp
+This project primary use case, is to be used as a nodejs library for running RWKV.cpp
 The CLI tooling, is simply a helper tooling, to do quick demo's or benchmark via node.js locally
 
 **World model is not yet supported**
 
+## Running it as a JS lib
+```.js
+const RWKV = require("RWKV-cpp-node");
+
+// Load the module with the pre-qunatized cpp weights
+const raven = new RWKV("<path-to-your-model-bin-files>")
+
+// You must call the setup before completion
+await raven.setup();
+
+// Call the completion API
+let res = await raven.completion("RWKV is a")
+
+// And log, or do something with the result
+console.log( res.completion )
+```
+
+## Running it as a CLI
 ```.bash
 # Install globally
 npm install -g rwkv-cpp-node
@@ -119,7 +137,7 @@ Download one of the prequantized rwkv.cpp weights, from hugging face (raven, is 
 Alternatively you can download one of the [raven pretrained weights from the hugging face repo](https://huggingface.co/BlinkDL/rwkv-4-raven/tree/main). 
 And perform your own quantization conversion using the [original rwkv.cpp project](https://github.com/saharNooby/rwkv.cpp)
 
-# JS Usage
+# JS Usage Details
 
 The JS interface for the RWKV model is async/promises based
 
