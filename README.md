@@ -7,6 +7,12 @@ The CLI tooling, is simply a helper tooling, to do quick demo's or benchmark via
 
 **World model is not yet supported**
 
+> This is not a pure JS solution, and depends on the [precompiled RWKV.cpp binaries found here](https://github.com/saharNooby/rwkv.cpp)
+>
+> This currently runs purely on your CPU, while that means you can use nearly anything to run it, you also do not get any insane speed up with a GPU (yet)
+>
+> Additionally V2 breaks compatiblity with V1, due to changes in quantization weights.
+
 ## Running it as a JS lib
 ```.js
 const RWKV = require("RWKV-cpp-node");
@@ -39,12 +45,6 @@ rwkv-cpp-node --threads 4 --gpu 100%
 # For benchmarking
 rwkv-cpp-node --threads 4 --gpu 0 --dragon --size 100
 ```
-
-> This is not a pure JS solution, and depends on the [precompiled RWKV.cpp binaries found here](https://github.com/saharNooby/rwkv.cpp)
->
-> This currently runs purely on your CPU, while that means you can use nearly anything to run it, you also do not get any insane speed up with a GPU (yet)
->
-> Additionally V2 breaks compatiblity with V1, due to changes in quantization weights.
 
 # What is RWKV?
 
