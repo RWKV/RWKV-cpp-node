@@ -17,7 +17,10 @@ The CLI tooling, is simply a helper tooling, to do quick demo's or benchmark via
 const RWKV = require("RWKV-cpp-node");
 
 // Load the module with the pre-qunatized cpp weights
-const raven = new RWKV("<path-to-your-model-bin-files>")
+const raven = new RWKV({
+	path: "<path-to-your-model-bin-files>"
+	... other params ...
+})
 
 // You must call the setup before completion
 await raven.setup();
