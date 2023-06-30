@@ -37,7 +37,8 @@ npm install -g rwkv-cpp-node
 # which will guide you in downloading, and running the chat model
 rwkv-cpp-node --setup
 
-# You can run the chat model, with thread count / gpu offload %
+# You can run the chat model, with thread count
+# / gpu offload % (experimental, not optimized)
 rwkv-cpp-node --threads 4 --gpu 100%
 
 # For benchmarking
