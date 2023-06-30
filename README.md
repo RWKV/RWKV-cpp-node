@@ -2,8 +2,8 @@
 
 Arguably the easiest way to get RWKV.cpp running on node.js
 
-This project exists both as a CLI tool
-And as a usable nodejs library
+This project pirmary use case, is to be used as a nodejs library for running RWKV.cpp
+The CLI tooling, is simply a helper tooling, to do quick demo's or benchmark via node.js locally
 
 **World model is not yet supported**
 
