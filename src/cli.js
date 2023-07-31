@@ -31,6 +31,7 @@ const os = require('os');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const Readable = require('stream').Readable;
 const ProgressBar = require('progress');
 const RWKV = require("./RWKV");
 const inquirerPromise = import('inquirer');
@@ -139,50 +140,52 @@ async function promptModelSelection() {
 async function downloadModelRaw(model) {
 	const destinationPath = path.join(RWKV_CLI_DIR, `${model.name}`);
 	console.log(`Downloading '${model.label}' - this will be saved to ${destinationPath}`);
-  
+	
 	const response = await fetch(model.url);
-	if (!response.ok) {
-	  throw new Error(`Failed to download ${model.label} model: ${response.statusText}`);
+	if (!response.ok || !response.body) {
+	  throw new Error(`Failed to download model ${model.label}: ${response.statusText}`);
 	}
+	const startTime = Date.now();
 	const fileSize = Number(response.headers.get('content-length'));
-  
+
 	// Incremental downloaded size and speed
 	let downloadedSize = 0;
 	let downloadedSize_gb = 0;
 	let speed = 0;
-  
+
 	const progressBar = new ProgressBar('[:bar] :percent :etas - :downloadedSize_gb GB - :speed MB/s', {
 	  complete: '=',
 	  incomplete: '-',
 	  width: 20,
 	  total: fileSize,
 	});
+
+	const readableStream = Readable.fromWeb(response.body);
 	const outputStream = fs.createWriteStream(destinationPath);
-  
+
 	return new Promise((resolve, reject) => {
-	  response.body
-		.pipe(outputStream)
-		.on('error', reject)
-		.on('data', (chunk) => {
-		  // Calculate size and speed
-		  downloadedSize += chunk.length;
-		  downloadedSize_gb = (downloadedSize / 1024 / 1024 / 1024).toFixed(2);
-		  const timeTaken = (Date.now() - startTime) / 1000;
-		  speed = (downloadedSize / 1024 / 1024 / timeTaken).toFixed(2);
-  
-		  progressBar.tick(chunk.length, {
-			speed: speed,
-			downloadedSize_gb: downloadedSize_gb,
-		  });
-		})
-		.on('end', () => {
-		  progressBar.terminate();
-		  console.log(`Model ${model.name} downloaded to ${destinationPath}`);
-		  outputStream.end();
-		  resolve(destinationPath);
-		});
+	  readableStream.pipe(outputStream);
+	  readableStream.on('data', (chunk) => {
+	    // Calculate size and speed
+	    const timeTaken = (Date.now() - startTime) / 1000;
+	    downloadedSize += chunk.length;
+	    downloadedSize_gb = (downloadedSize / 1024 / 1024 / 1024).toFixed(2);
+	    speed = (downloadedSize / 1024 / 1024 / timeTaken).toFixed(2);
+
+	    progressBar.tick(chunk.length, {
+	      speed: speed,
+	      downloadedSize_gb: downloadedSize_gb,
+	    });
+	  })
+	  readableStream.on('end', () => {
+	    progressBar.terminate();
+	    console.log(`Model ${model.name} downloaded to ${destinationPath}`);
+	    outputStream.end();
+	    resolve(destinationPath);
+	  });
+	  readableStream.on('error', reject);
 	});
-  }
+}
   
 /**
 * Given a file path, compute the sha256 hash of the file
