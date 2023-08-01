@@ -43,9 +43,9 @@ if( process.arch === 'arm64' ) {
 		if( cpuFeatures == null ) {
 			// console.warn("cpu-features failed to load, assuming AVX CPU is supported")
 			rwkvCppLibPath = './lib/rwkv-avx.dll';
-		} else if( cpuFeatures.avx512 ) {
+		} else if( cpuFeatures.flags.avx512 ) {
 			rwkvCppLibPath = './lib/rwkv-avx512.dll';
-		} else if( cpuFeatures.avx2 ) {
+		} else if( cpuFeatures.flags.avx2 ) {
 			rwkvCppLibPath = './lib/rwkv-avx2.dll';
 		} else {
 			// AVX detection is not reliable, so if we fail to detect, we downgrade to lowest avx version
